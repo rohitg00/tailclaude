@@ -8,6 +8,8 @@ const TAILSCALE_CLI =
 
 const SHUTDOWN_TIMEOUT_MS = 5_000;
 
+let shuttingDown = false;
+
 async function unpublishTailscale(): Promise<void> {
   return new Promise((resolve) => {
     execFile(
@@ -27,6 +29,9 @@ async function unpublishTailscale(): Promise<void> {
 }
 
 async function shutdown(signal: string): Promise<void> {
+  if (shuttingDown) return;
+  shuttingDown = true;
+
   console.log(`\n${signal} received — shutting down TailClaude`);
 
   const forceExit = setTimeout(() => {
@@ -46,7 +51,7 @@ async function shutdown(signal: string): Promise<void> {
 }
 
 export function registerShutdownHandlers(): void {
-  process.on("SIGINT", () => shutdown("SIGINT"));
-  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.once("SIGINT", () => shutdown("SIGINT"));
+  process.once("SIGTERM", () => shutdown("SIGTERM"));
   console.log("Shutdown handlers registered (SIGINT, SIGTERM)");
 }

@@ -21,11 +21,19 @@ type Session = {
 };
 
 export const handleHealth = async (_req: ApiRequest): Promise<ApiResponse> => {
-  const [tailscale, published, sessions] = await Promise.all([
-    state.get<TailscaleState>({ scope: "config", key: "tailscale" }),
-    state.get<PublishedState>({ scope: "config", key: "published_url" }),
-    state.list<Session>({ scope: "sessions" }),
-  ]);
+  let tailscale: TailscaleState | null = null;
+  let published: PublishedState | null = null;
+  let sessions: Session[] = [];
+
+  try {
+    [tailscale, published, sessions] = await Promise.all([
+      state.get<TailscaleState>({ scope: "config", key: "tailscale" }),
+      state.get<PublishedState>({ scope: "config", key: "published_url" }),
+      state.list<Session>({ scope: "sessions" }),
+    ]);
+  } catch {
+    // state store unavailable — return defaults
+  }
 
   return {
     status_code: 200,

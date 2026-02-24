@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import type { Context } from "iii-sdk";
+import QRCode from "qrcode";
 import { state } from "../state.js";
 
 const TAILSCALE_CLI =
@@ -59,9 +60,8 @@ async function publishToTailscale(ctx: Context): Promise<void> {
   const statusJson = await runCommand("tailscale", ["status", "--json"]);
   const parsed = JSON.parse(statusJson);
   const hostname = parsed.Self?.HostName ?? "unknown";
-  const dnsParts =
-    parsed.Self?.DNSName?.split(".").slice(-3, -1).join(".") ?? "net";
-  const url = `https://${hostname}.tail${dnsParts}`;
+  const dnsName = parsed.Self?.DNSName?.replace(/\.$/, "");
+  const url = dnsName ? `https://${dnsName}` : `https://${hostname}.ts.net`;
 
   await state.set({
     scope: "config",
@@ -71,6 +71,14 @@ async function publishToTailscale(ctx: Context): Promise<void> {
 
   ctx.logger.info(`Published to Tailscale: ${url}`);
   ctx.logger.info("Access TailClaude from any device on your tailnet");
+
+  try {
+    const qr = await QRCode.toString(url, { type: "terminal", small: true });
+    console.log("\n" + qr);
+    console.log(`  Scan to open: ${url}\n`);
+  } catch {
+    // QR generation is best-effort
+  }
 }
 
 function matchesProxyTarget(json: string): boolean {
