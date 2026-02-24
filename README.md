@@ -6,28 +6,22 @@ TailClaude publishes a full Claude Code web interface to every device on your ta
 
 ## Why TailClaude?
 
-The popular "doom coding" approach uses SSH + tmux + Termius to access Claude Code from a phone. It works, but requires:
+Every "doom coding" setup — SSH, mosh, tmux, Termius, Moshi — still puts you in a terminal. You're still typing on a tiny keyboard, memorizing shortcuts, and managing connections.
 
-- Installing Termius (or another SSH client)
-- Configuring SSH keys and auth
-- Learning tmux shortcuts (`Ctrl+b d` to detach, `Ctrl+b c` for new window)
-- Typing code on a tiny terminal keyboard
+TailClaude removes the terminal entirely. **No SSH. No mosh. No terminal client. Just open a browser.**
 
-TailClaude takes a different approach: **open a browser, start chatting**.
-
-| | SSH + tmux + Termius | TailClaude |
+| | Terminal approach (SSH/mosh + tmux) | TailClaude |
 |---|---|---|
-| **Client** | Termius app (SSH terminal) | Any browser |
-| **Setup on phone** | Install Tailscale + Termius, configure SSH | Scan QR code |
-| **Session persistence** | tmux keeps terminal alive | iii engine state store |
-| **Interface** | Full terminal emulator | Web chat UI with Markdown |
+| **What you need** | Terminal app + SSH/mosh + tmux | Any browser |
+| **Setup on phone** | Install app, configure keys/auth | Scan QR code |
+| **Network switching** | mosh helps, SSH drops | Browser reconnects automatically |
+| **Interface** | Terminal emulator | Web chat UI with Markdown rendering |
 | **Session sharing** | `tmux attach` (terminal only) | Browse ALL sessions (terminal + web) |
 | **Model switching** | Edit CLI flags manually | Dropdown menu (Opus, Sonnet, Haiku) |
 | **Mobile experience** | Tiny terminal, keyboard shortcuts | Touch-optimized responsive UI |
-| **Streaming** | Real-time in terminal | Real-time SSE in browser |
-| **Install time** | ~15 minutes | `npm install && iii -c iii-config.yaml` |
+| **Cost visibility** | None | Live token count + per-message cost |
 
-Both approaches use Tailscale for secure access. TailClaude just removes everything else.
+Tailscale handles the secure connection. TailClaude handles everything else.
 
 ## Architecture
 
