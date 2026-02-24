@@ -736,8 +736,39 @@ async function streamMessage(message, isInit) {
             continue
           }
 
-          if (event.type === 'content_block_delta' || event.type === 'assistant') {
-            const text = event.delta?.text || event.content?.text || event.text || ''
+          if (event.type === 'assistant' && event.message) {
+            const content = event.message.content
+            if (Array.isArray(content)) {
+              for (const block of content) {
+                if (block.type === 'text' && block.text) {
+                  if (firstToken) {
+                    loadingEl.remove()
+                    msgEl = addStreamingMessage()
+                    firstToken = false
+                  }
+                  appendToStream(msgEl, block.text)
+                }
+                if (block.type === 'tool_use' && block.name) {
+                  if (!streamedTools.includes(block.name)) {
+                    streamedTools.push(block.name)
+                    if (msgEl) addToolBadge(msgEl, block.name)
+                  }
+                }
+              }
+            }
+            const usage = event.message.usage
+            if (usage) {
+              const inp = (usage.input_tokens || 0) + (usage.cache_read_input_tokens || 0) + (usage.cache_creation_input_tokens || 0)
+              const out = usage.output_tokens || 0
+              if (inp || out) {
+                $costDisplay.textContent = `${inp.toLocaleString()} in / ${out.toLocaleString()} out`
+              }
+            }
+            continue
+          }
+
+          if (event.type === 'content_block_delta') {
+            const text = event.delta?.text || ''
             if (text) {
               if (firstToken) {
                 loadingEl.remove()
@@ -748,39 +779,20 @@ async function streamMessage(message, isInit) {
             }
           }
 
-          if (event.type === 'result' && event.result) {
-            if (firstToken) {
+          if (event.type === 'result') {
+            if (event.result && firstToken) {
               loadingEl.remove()
               msgEl = addStreamingMessage()
               firstToken = false
+              appendToStream(msgEl, event.result)
             }
-            appendToStream(msgEl, event.result)
-          }
-
-          if (event.tool_use || event.type === 'tool_use') {
-            const toolName = event.tool_use?.name || event.name || 'tool'
-            if (!streamedTools.includes(toolName)) {
-              streamedTools.push(toolName)
-              if (msgEl) addToolBadge(msgEl, toolName)
+            if (event.total_cost_usd !== undefined) {
+              totalCost = parseFloat(event.total_cost_usd)
             }
-          }
-
-          if (event.type === 'content_block_start' && event.content_block?.type === 'tool_use') {
-            const toolName = event.content_block.name || 'tool'
-            if (!streamedTools.includes(toolName)) {
-              streamedTools.push(toolName)
-              if (msgEl) addToolBadge(msgEl, toolName)
-            }
-          }
-
-          if (event.total_cost_usd) {
-            totalCost = parseFloat(event.total_cost_usd)
-            $costDisplay.textContent = `$${totalCost.toFixed(4)}`
-          }
-
-          if (event.cost_usd) {
-            totalCost += parseFloat(event.cost_usd)
-            $costDisplay.textContent = `$${totalCost.toFixed(4)}`
+            const usage = event.usage || {}
+            const inp = (usage.input_tokens || 0) + (usage.cache_read_input_tokens || 0) + (usage.cache_creation_input_tokens || 0)
+            const out = usage.output_tokens || 0
+            $costDisplay.textContent = `$${totalCost.toFixed(4)} · ${inp.toLocaleString()} in / ${out.toLocaleString()} out`
           }
 
         } catch {
