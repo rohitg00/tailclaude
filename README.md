@@ -91,37 +91,30 @@ Tailscale handles the secure connection. TailClaude handles everything else.
 - [Tailscale](https://tailscale.com) installed (optional — works locally without it)
 - Node.js 20+
 
-## Setup
+## Quick Start
+
+**3 commands. Under 60 seconds.**
 
 ```bash
 git clone https://github.com/rohitg00/tailclaude.git
 cd tailclaude
 npm install
-```
-
-## Running
-
-### Option A: iii manages everything (recommended)
-
-```bash
 iii -c iii-config.yaml
 ```
 
-This starts the iii engine and automatically runs `npx tsx src/index.ts`.
+That's it. Open the URL printed in your terminal (or scan the QR code from your phone).
 
-### Option B: Run separately
+If Tailscale is running, TailClaude auto-publishes to your tailnet with HTTPS. No config needed.
+
+### Other Ways to Run
+
+**Run worker separately** (if iii engine is already running):
 
 ```bash
-# Terminal 1 — start iii engine
-iii -c iii-config.yaml
-
-# Terminal 2 — start the worker
 npm run dev
 ```
 
-### Option C: Proxy only (no iii engine)
-
-For quick testing without the full iii engine:
+**Proxy only** (quick testing, no iii engine):
 
 ```bash
 npx tsx -e 'import{startProxy}from"./src/proxy.ts";startProxy()'
@@ -130,20 +123,10 @@ npx tsx -e 'import{startProxy}from"./src/proxy.ts";startProxy()'
 ### Verify
 
 ```bash
-# Proxy health check (includes Tailscale URL and session count)
-curl http://localhost:3110/health
-
-# Open the chat UI
-open http://localhost:3110
-
-# List all sessions with metadata
-curl http://localhost:3110/sessions
-
-# Load a specific session's conversation
-curl http://localhost:3110/sessions/<session-id>
-
-# QR code SVG
-curl http://localhost:3110/qr
+curl http://localhost:3110/health    # Proxy health + Tailscale URL + sessions
+open http://localhost:3110           # Open the chat UI
+curl http://localhost:3110/sessions  # List all sessions with metadata
+curl http://localhost:3110/qr        # QR code SVG
 ```
 
 ## Chat UI Features
@@ -287,11 +270,13 @@ If Tailscale is not installed, it runs in local-only mode at `http://127.0.0.1:3
 }
 ```
 
-## Inspiration
+## Background
 
-TailClaude was inspired by the "doom coding" movement — developers using Tailscale + SSH + tmux + Termius to code from their phones. Articles by [Pete Sena](https://medium.com/@petesena) and [Emre Isik](https://medium.com/@emreisik95), plus the [doom-coding](https://github.com/rberg27/doom-coding) repo by Ryan Bergamini, showed how powerful mobile coding can be.
+The "doom coding" movement proved that coding from a phone is real — [Pete Sena](https://medium.com/@petesena), [Emre Isik](https://medium.com/@emreisik95), and [Ryan Bergamini's doom-coding repo](https://github.com/rberg27/doom-coding) showed what's possible with SSH + tmux + Termius. Others improved the connection layer with mosh and Moshi for persistent sessions through network switches.
 
-TailClaude takes this further by removing the terminal layer entirely — just a browser and a URL.
+But every approach still required a terminal client, key management, and tiny-keyboard typing.
+
+TailClaude asks: **what if you didn't need a terminal at all?** One URL, any browser, full Claude Code — with streaming, session history, model switching, and cost tracking that no terminal setup can match.
 
 ## License
 
