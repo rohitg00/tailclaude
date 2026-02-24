@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import type { Context } from "iii-sdk";
+import QRCode from "qrcode";
 import { state } from "../state.js";
 
 const TAILSCALE_CLI =
@@ -7,7 +8,7 @@ const TAILSCALE_CLI =
     ? "/Applications/Tailscale.app/Contents/MacOS/Tailscale"
     : "tailscale";
 
-const TARGET = "http://127.0.0.1:3111";
+const TARGET = "http://127.0.0.1:3110";
 
 export const handleEngineStarted = async (
   _data: unknown,
@@ -29,7 +30,7 @@ export const handleEngineStarted = async (
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     ctx.logger.warn(`Tailscale not available: ${msg}`);
-    ctx.logger.info("Running in local-only mode at http://127.0.0.1:3111");
+    ctx.logger.info("Running in local-only mode at http://127.0.0.1:3110");
 
     await state.set({
       scope: "config",
@@ -71,6 +72,14 @@ async function publishToTailscale(ctx: Context): Promise<void> {
 
   ctx.logger.info(`Published to Tailscale: ${url}`);
   ctx.logger.info("Access TailClaude from any device on your tailnet");
+
+  try {
+    const qr = await QRCode.toString(url, { type: "terminal", small: true });
+    console.log("\n" + qr);
+    console.log(`  Scan to open: ${url}\n`);
+  } catch {
+    // QR generation is best-effort
+  }
 }
 
 async function checkExistingServe(): Promise<boolean> {
@@ -80,7 +89,7 @@ async function checkExistingServe(): Promise<boolean> {
     const tcp = status?.TCP ?? status?.Web;
     if (!tcp) return false;
     const handlers = JSON.stringify(tcp);
-    return handlers.includes("3111") || handlers.includes(TARGET);
+    return handlers.includes("3110") || handlers.includes(TARGET);
   } catch {
     return false;
   }
@@ -123,7 +132,7 @@ async function verifyServeStatus(ctx: Context): Promise<boolean> {
       const raw = await runCommand("tailscale", ["serve", "status", "--json"]);
       const status = JSON.parse(raw);
       const handlers = JSON.stringify(status);
-      if (handlers.includes("3111") || handlers.includes(TARGET)) {
+      if (handlers.includes("3110") || handlers.includes(TARGET)) {
         ctx.logger.info("Tailscale serve status verified");
         return true;
       }
