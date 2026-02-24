@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TailClaude</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0a0a0a;--surface:#141414;--border:#252525;--text:#e4e4e7;--muted:#71717a;--accent:#a78bfa;--accent-dim:#7c3aed;--user-bg:#1e1b4b;--assistant-bg:#1a1a1a;--code-bg:#1e1e2e;--danger:#ef4444;--success:#22c55e}
+html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text)}
+#app{display:flex;height:100vh}
+.sidebar{width:260px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
+.sidebar-header{padding:16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.sidebar-header h1{font-size:16px;font-weight:600;letter-spacing:-.02em}
+.sidebar-header span{font-size:11px;color:var(--muted);background:var(--bg);padding:2px 8px;border-radius:10px}
+.new-chat{margin:12px;padding:10px;background:var(--accent-dim);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;transition:opacity .15s}
+.new-chat:hover{opacity:.85}
+.new-chat:disabled{opacity:.5;cursor:not-allowed}
+.sessions{flex:1;overflow-y:auto;padding:4px 8px}
+.session-item{padding:10px 12px;border-radius:8px;cursor:pointer;font-size:13px;color:var(--muted);transition:background .1s;margin-bottom:2px;display:flex;justify-content:space-between;align-items:center}
+.session-item:hover{background:var(--bg)}
+.session-item.active{background:var(--bg);color:var(--text)}
+.session-item .count{font-size:11px;background:var(--border);padding:1px 6px;border-radius:8px}
+.main{flex:1;display:flex;flex-direction:column;min-width:0}
+.topbar{padding:12px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;font-size:13px;color:var(--muted)}
+.topbar .model{background:var(--accent-dim);color:#fff;padding:2px 10px;border-radius:10px;font-size:11px;font-weight:500}
+.messages{flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:16px}
+.msg{max-width:720px;width:100%;margin:0 auto;padding:12px 16px;border-radius:12px;font-size:14px;line-height:1.65}
+.msg.user{background:var(--user-bg);align-self:flex-end;border-bottom-right-radius:4px}
+.msg.assistant{background:var(--assistant-bg);border:1px solid var(--border);align-self:flex-start;border-bottom-left-radius:4px}
+.msg .meta{font-size:11px;color:var(--muted);margin-top:8px;display:flex;gap:12px}
+.msg pre{background:var(--code-bg);padding:12px;border-radius:8px;overflow-x:auto;margin:8px 0;font-size:13px;line-height:1.5}
+.msg code{font-family:'SF Mono',Menlo,Consolas,monospace;font-size:.9em}
+.msg p+p{margin-top:8px}
+.msg ul,.msg ol{margin:4px 0 4px 20px}
+.msg strong{font-weight:600}
+.msg em{font-style:italic}
+.tools-used{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.tool-badge{font-size:11px;background:var(--border);color:var(--muted);padding:2px 8px;border-radius:6px}
+.input-area{padding:16px 20px;border-top:1px solid var(--border);background:var(--surface)}
+.input-wrap{max-width:720px;margin:0 auto;display:flex;gap:8px;align-items:flex-end}
+.input-wrap textarea{flex:1;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px 14px;color:var(--text);font-size:14px;font-family:inherit;resize:none;min-height:42px;max-height:200px;line-height:1.5;outline:none;transition:border-color .15s}
+.input-wrap textarea:focus{border-color:var(--accent)}
+.input-wrap button{background:var(--accent-dim);color:#fff;border:none;border-radius:10px;padding:10px 18px;cursor:pointer;font-size:14px;font-weight:500;transition:opacity .15s;white-space:nowrap}
+.input-wrap button:hover{opacity:.85}
+.input-wrap button:disabled{opacity:.4;cursor:not-allowed}
+.status-bar{padding:6px 20px;font-size:11px;color:var(--muted);border-top:1px solid var(--border);display:flex;gap:16px;justify-content:center}
+.empty{flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;color:var(--muted)}
+.empty h2{font-size:24px;font-weight:600;color:var(--text)}
+.empty p{font-size:14px}
+.loading{display:inline-flex;gap:4px;padding:8px 0}
+.loading span{width:6px;height:6px;background:var(--accent);border-radius:50%;animation:bounce .6s infinite alternate}
+.loading span:nth-child(2){animation-delay:.15s}
+.loading span:nth-child(3){animation-delay:.3s}
+@keyframes bounce{to{opacity:.3;transform:translateY(-6px)}}
+@media(max-width:768px){.sidebar{display:none}.msg{max-width:100%}}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <h1>TailClaude</h1>
+      <span>via iii</span>
+    </div>
+    <button class="new-chat" id="newChat">+ New Chat</button>
+    <div class="sessions" id="sessionList"></div>
+  </div>
+  <div class="main">
+    <div class="topbar">
+      <span id="sessionInfo">No active session</span>
+      <span class="model" id="modelBadge">sonnet</span>
+    </div>
+    <div class="messages" id="messages">
+      <div class="empty">
+        <h2>TailClaude</h2>
+        <p>Claude Code on your tailnet, powered by iii engine</p>
+        <p style="font-size:12px">Click "New Chat" to start a session</p>
+      </div>
+    </div>
+    <div class="input-area">
+      <div class="input-wrap">
+        <textarea id="input" placeholder="Send a message..." rows="1" disabled></textarea>
+        <button id="send" disabled>Send</button>
+      </div>
+    </div>
+    <div class="status-bar">
+      <span id="statusText">Disconnected</span>
+      <span id="costDisplay"></span>
+    </div>
+  </div>
+</div>
+<script>
+const $ = s => document.querySelector(s)
+const $messages = $('#messages')
+const $input = $('#input')
+const $send = $('#send')
+const $newChat = $('#newChat')
+const $sessionList = $('#sessionList')
+const $sessionInfo = $('#sessionInfo')
+const $modelBadge = $('#modelBadge')
+const $statusText = $('#statusText')
+const $costDisplay = $('#costDisplay')
+
+let currentSession = null
+let sessions = []
+let totalCost = 0
+let sending = false
+
+async function api(path, opts = {}) {
+  const res = await fetch(path, {
+    headers: { 'content-type': 'application/json' },
+    ...opts,
+  })
+  return res.json()
+}
+
+async function checkHealth() {
+  try {
+    await api('/health')
+    $statusText.textContent = 'Connected'
+    $statusText.style.color = 'var(--success)'
+  } catch {
+    $statusText.textContent = 'Disconnected'
+    $statusText.style.color = 'var(--danger)'
+  }
+}
+
+async function loadSessions() {
+  try {
+    const data = await api('/sessions')
+    sessions = data.sessions || []
+    renderSessions()
+  } catch {}
+}
+
+function renderSessions() {
+  $sessionList.innerHTML = sessions.map(s => `
+    <div class="session-item ${s.id === currentSession?.id ? 'active' : ''}" data-id="${s.id}">
+      <span>${s.id.slice(0, 8)}...</span>
+      <span class="count">${s.messageCount}</span>
+    </div>
+  `).join('')
+
+  $sessionList.querySelectorAll('.session-item').forEach(el => {
+    el.onclick = () => {
+      currentSession = sessions.find(s => s.id === el.dataset.id)
+      setActiveSession()
+    }
+  })
+}
+
+function setActiveSession() {
+  if (!currentSession) return
+  $sessionInfo.textContent = `Session: ${currentSession.id.slice(0, 8)}...`
+  $modelBadge.textContent = currentSession.model
+  $input.disabled = false
+  $send.disabled = false
+  $messages.innerHTML = ''
+  renderSessions()
+  $input.focus()
+}
+
+async function createSession() {
+  $newChat.disabled = true
+  $newChat.textContent = 'Creating...'
+
+  try {
+    const data = await api('/sessions', { method: 'POST', body: JSON.stringify({ model: 'sonnet' }) })
+    currentSession = { id: data.sessionId, model: data.model || 'sonnet', messageCount: 0 }
+    sessions.unshift(currentSession)
+    setActiveSession()
+    addMessage('assistant', data.initResponse || 'Ready.')
+  } catch (err) {
+    addMessage('assistant', `Failed to create session: ${err.message}`)
+  } finally {
+    $newChat.disabled = false
+    $newChat.textContent = '+ New Chat'
+  }
+}
+
+async function sendMessage() {
+  const text = $input.value.trim()
+  if (!text || !currentSession || sending) return
+
+  sending = true
+  $input.value = ''
+  $send.disabled = true
+  autoResize()
+
+  addMessage('user', text)
+  const loadingEl = addLoading()
+
+  try {
+    const data = await api('/sessions/chat', {
+      method: 'POST',
+      body: JSON.stringify({ sessionId: currentSession.id, message: text }),
+    })
+
+    loadingEl.remove()
+    addMessage('assistant', data.response, {
+      duration: data.duration,
+      toolsUsed: data.toolsUsed,
+      cost: data.cost,
+    })
+
+    if (data.cost) {
+      totalCost += parseFloat(data.cost)
+      $costDisplay.textContent = `Total cost: $${totalCost.toFixed(4)}`
+    }
+
+    currentSession.messageCount++
+  } catch (err) {
+    loadingEl.remove()
+    addMessage('assistant', `Error: ${err.message}`)
+  } finally {
+    sending = false
+    $send.disabled = false
+    $input.focus()
+  }
+}
+
+function addMessage(role, text, meta = {}) {
+  const empty = $messages.querySelector('.empty')
+  if (empty) empty.remove()
+
+  const div = document.createElement('div')
+  div.className = `msg ${role}`
+  div.innerHTML = renderMarkdown(text)
+
+  if (meta.duration || meta.toolsUsed?.length || meta.cost) {
+    let metaHtml = '<div class="meta">'
+    if (meta.duration) metaHtml += `<span>${meta.duration}ms</span>`
+    if (meta.cost) metaHtml += `<span>$${meta.cost}</span>`
+    metaHtml += '</div>'
+
+    if (meta.toolsUsed?.length) {
+      metaHtml += '<div class="tools-used">' +
+        meta.toolsUsed.map(t => `<span class="tool-badge">${t}</span>`).join('') +
+        '</div>'
+    }
+
+    div.innerHTML += metaHtml
+  }
+
+  $messages.appendChild(div)
+  $messages.scrollTop = $messages.scrollHeight
+  return div
+}
+
+function addLoading() {
+  const div = document.createElement('div')
+  div.className = 'msg assistant'
+  div.innerHTML = '<div class="loading"><span></span><span></span><span></span></div>'
+  $messages.appendChild(div)
+  $messages.scrollTop = $messages.scrollHeight
+  return div
+}
+
+function renderMarkdown(text) {
+  if (!text) return ''
+  return text
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => `<pre><code>${code.trim()}</code></pre>`)
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/^- (.+)$/gm, '<li>$1</li>')
+    .replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>')
+    .replace(/\n\n/g, '</p><p>')
+    .replace(/\n/g, '<br>')
+    .replace(/^/, '<p>').replace(/$/, '</p>')
+}
+
+function autoResize() {
+  $input.style.height = 'auto'
+  $input.style.height = Math.min($input.scrollHeight, 200) + 'px'
+}
+
+$input.addEventListener('input', autoResize)
+$input.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault()
+    sendMessage()
+  }
+})
+$send.addEventListener('click', sendMessage)
+$newChat.addEventListener('click', createSession)
+
+checkHealth()
+loadSessions()
+setInterval(checkHealth, 30000)
+</script>
+</body>
+</html>
