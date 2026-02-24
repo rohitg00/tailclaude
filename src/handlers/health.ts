@@ -1,5 +1,8 @@
 import type { ApiRequest, ApiResponse } from "iii-sdk";
+import { getEngineConnectionState } from "../iii.js";
 import { state } from "../state.js";
+import { getSessionIndex } from "../sessions.js";
+import { metricsCollector } from "../metrics.js";
 
 type TailscaleState = {
   ip: string | null;
@@ -12,28 +15,25 @@ type PublishedState = {
   publishedAt: string;
 };
 
-type Session = {
-  id: string;
-  model: string;
-  createdAt: string;
-  lastUsed: string;
-  messageCount: number;
-};
-
 export const handleHealth = async (_req: ApiRequest): Promise<ApiResponse> => {
   let tailscale: TailscaleState | null = null;
   let published: PublishedState | null = null;
-  let sessions: Session[] = [];
+  let activeChats: unknown[] = [];
+  let sessionCount = 0;
 
   try {
-    [tailscale, published, sessions] = await Promise.all([
+    [tailscale, published, activeChats, sessionCount] = await Promise.all([
       state.get<TailscaleState>({ scope: "config", key: "tailscale" }),
       state.get<PublishedState>({ scope: "config", key: "published_url" }),
-      state.list<Session>({ scope: "sessions" }),
+      state.list({ scope: "active_chats" }),
+      getSessionIndex().then((s) => s.length),
     ]);
   } catch {
-    // state store unavailable — return defaults
+    // state store unavailable
   }
+
+  const connectionState = getEngineConnectionState();
+  const workerMetrics = metricsCollector.collect();
 
   return {
     status_code: 200,
@@ -42,6 +42,10 @@ export const handleHealth = async (_req: ApiRequest): Promise<ApiResponse> => {
       status: "ok",
       service: "tailclaude",
       timestamp: new Date().toISOString(),
+      engine: {
+        connected: connectionState === "connected",
+        state: connectionState,
+      },
       tailscale: {
         connected: !!tailscale?.ip,
         ip: tailscale?.ip ?? null,
@@ -49,7 +53,15 @@ export const handleHealth = async (_req: ApiRequest): Promise<ApiResponse> => {
       },
       publishedUrl: published?.url ?? null,
       sessions: {
-        active: sessions.length,
+        active: activeChats.length,
+        total: sessionCount,
+      },
+      worker: {
+        memory_heap_used: workerMetrics.memory_heap_used,
+        memory_rss: workerMetrics.memory_rss,
+        cpu_percent: workerMetrics.cpu_percent,
+        event_loop_lag_ms: workerMetrics.event_loop_lag_ms,
+        uptime_seconds: workerMetrics.uptime_seconds,
       },
     },
   };

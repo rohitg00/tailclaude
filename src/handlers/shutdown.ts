@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { Logger } from "iii-sdk";
 import { stopProxy } from "../proxy.js";
 
 const TAILSCALE_CLI =
@@ -7,6 +8,7 @@ const TAILSCALE_CLI =
     : "tailscale";
 
 const SHUTDOWN_TIMEOUT_MS = 5_000;
+const logger = new Logger(undefined, "tailclaude-shutdown");
 
 let shuttingDown = false;
 
@@ -18,9 +20,9 @@ async function unpublishTailscale(): Promise<void> {
       { timeout: 10_000 },
       (err, _stdout, stderr) => {
         if (err) {
-          console.error(`Tailscale cleanup error: ${stderr || err.message}`);
+          logger.error("Tailscale cleanup error", { error: stderr || err.message });
         } else {
-          console.log("Tailscale serve unpublished (HTTPS 443)");
+          logger.info("Tailscale serve unpublished (HTTPS 443)");
         }
         resolve();
       },
@@ -32,10 +34,10 @@ async function shutdown(signal: string): Promise<void> {
   if (shuttingDown) return;
   shuttingDown = true;
 
-  console.log(`\n${signal} received — shutting down TailClaude`);
+  logger.info("Shutting down TailClaude", { signal });
 
   const forceExit = setTimeout(() => {
-    console.error("Graceful shutdown timed out, forcing exit");
+    logger.error("Graceful shutdown timed out, forcing exit");
     process.exit(1);
   }, SHUTDOWN_TIMEOUT_MS);
   forceExit.unref();
@@ -53,5 +55,5 @@ async function shutdown(signal: string): Promise<void> {
 export function registerShutdownHandlers(): void {
   process.once("SIGINT", () => shutdown("SIGINT"));
   process.once("SIGTERM", () => shutdown("SIGTERM"));
-  console.log("Shutdown handlers registered (SIGINT, SIGTERM)");
+  logger.info("Shutdown handlers registered", { signals: ["SIGINT", "SIGTERM"] });
 }

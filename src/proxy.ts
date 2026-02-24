@@ -6,19 +6,23 @@ import {
   type ServerResponse,
 } from "node:http";
 import { spawn, execFile, type ChildProcess } from "node:child_process";
-import {
-  readFileSync,
-  readdirSync,
-  statSync,
-  openSync,
-  readSync,
-  closeSync,
-} from "node:fs";
+import { readFileSync, readdirSync, statSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { homedir } from "node:os";
 import QRCode from "qrcode";
+import { Logger } from "iii-sdk";
+import { withSpan } from "iii-sdk/telemetry";
+import {
+  getEngineConnectionState,
+  onEngineConnectionStateChange,
+} from "./iii.js";
+import { state } from "./state.js";
+import { emit } from "./hooks.js";
+import { writeChatEvent, deleteChatGroup } from "./streams.js";
+import { getSessionIndex, getSessionFilePath } from "./sessions.js";
+import { metricsCollector } from "./metrics.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const III_PORT = 3111;
@@ -27,6 +31,8 @@ const isProduction = process.env.NODE_ENV === "production";
 const API_TOKEN = process.env.TAILCLAUDE_TOKEN || null;
 const MAX_BODY_BYTES = 1_000_000;
 
+const logger = new Logger(undefined, "tailclaude-proxy");
+
 let cachedHtml: string | null = null;
 
 const CLAUDE_PATH =
@@ -34,7 +40,10 @@ const CLAUDE_PATH =
     ? `${process.env.HOME}/.local/bin/claude`
     : "claude";
 
-const PROJECTS_DIR = join(homedir(), ".claude", "projects");
+const TAILSCALE_CLI =
+  process.platform === "darwin"
+    ? "/Applications/Tailscale.app/Contents/MacOS/Tailscale"
+    : "tailscale";
 
 const ALLOWED_MODELS = new Set(["sonnet", "opus", "haiku"]);
 const ALLOWED_MODES = new Set([
@@ -46,6 +55,15 @@ const ALLOWED_MODES = new Set([
 ]);
 const ALLOWED_EFFORTS = new Set(["low", "medium", "high"]);
 
+let engineConnected = false;
+let engineConnectionState = "disconnected";
+
+onEngineConnectionStateChange((s) => {
+  engineConnected = s === "connected";
+  engineConnectionState = s;
+  logger.info("Engine connection state changed", { state: s });
+});
+
 function loadHtml(): string {
   if (!cachedHtml || !isProduction) {
     cachedHtml = readFileSync(resolve(__dirname, "ui.html"), "utf-8");
@@ -53,12 +71,17 @@ function loadHtml(): string {
   return cachedHtml;
 }
 
-const TAILSCALE_CLI =
-  process.platform === "darwin"
-    ? "/Applications/Tailscale.app/Contents/MacOS/Tailscale"
-    : "tailscale";
+async function getTailscaleUrl(): Promise<string> {
+  try {
+    const published = await state.get<{ url: string }>({
+      scope: "config",
+      key: "published_url",
+    });
+    if (published?.url) return published.url;
+  } catch {
+    // state unavailable, fall through
+  }
 
-function getTailscaleUrl(): Promise<string> {
   return new Promise((resolve) => {
     execFile(
       TAILSCALE_CLI,
@@ -202,128 +225,228 @@ function handleChat(req: IncomingMessage, res: ServerResponse): void {
         return;
       }
 
-      res.writeHead(200, {
-        ...corsHeaders(),
-        "content-type": "text/event-stream",
-        "cache-control": "no-cache",
-        connection: "keep-alive",
-      });
-
-      const args: string[] = [
-        "-p",
-        body.message,
-        "--output-format",
-        "stream-json",
-        "--verbose",
-      ];
-
-      if (body.sessionId) {
-        args.push("--resume", body.sessionId);
-      }
-      if (body.model) {
-        args.push("--model", body.model);
-      }
-      if (body.mode) {
-        args.push("--permission-mode", body.mode);
-      }
-      if (body.effort) {
-        args.push("--effort", body.effort);
-      }
-      if (body.maxBudget !== undefined && body.maxBudget !== null) {
-        args.push("--max-budget-usd", String(body.maxBudget));
-      }
-      if (body.systemPrompt) {
-        args.push("--append-system-prompt", body.systemPrompt);
-      }
-
-      const env = cleanEnv();
-      const child = spawn(CLAUDE_PATH, args, {
-        env,
-        cwd: "/tmp",
-        stdio: ["ignore", "pipe", "pipe"],
-      });
-
       const requestId = randomUUID();
-      activeProcesses.set(requestId, child);
-      const startTime = Date.now();
+      const model = body.model || "sonnet";
+      const mode = body.mode || "default";
+      const effort = body.effort || "medium";
 
-      res.write(
-        `data: ${JSON.stringify({ type: "request_id", requestId })}\n\n`,
-      );
+      withSpan("chat.request", { kind: 1 }, async (span) => {
+        span.setAttribute("chat.request_id", requestId);
+        span.setAttribute("chat.model", model);
+        span.setAttribute("chat.session_id", body.sessionId || "new");
+        span.setAttribute("chat.mode", mode);
+        span.setAttribute("chat.effort", effort);
 
-      let lastSessionId: string | null = body.sessionId || null;
-      let lineBuffer = "";
+        logger.info("Chat started", {
+          requestId,
+          model,
+          sessionId: body.sessionId,
+          mode,
+          effort,
+        });
 
-      child.stdout.on("data", (chunk: Buffer) => {
-        lineBuffer += chunk.toString();
-        const lines = lineBuffer.split("\n");
-        lineBuffer = lines.pop() || "";
+        await emit("chat::started", {
+          requestId,
+          sessionId: body.sessionId || null,
+          model,
+          mode,
+          effort,
+        });
 
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed) continue;
+        await state.set({
+          scope: "active_chats",
+          key: requestId,
+          data: {
+            sessionId: body.sessionId || null,
+            model,
+            startedAt: new Date().toISOString(),
+            pid: null as number | null,
+          },
+        });
 
-          try {
-            const event = JSON.parse(trimmed);
-            if (event.session_id) {
-              lastSessionId = event.session_id;
-            }
-            res.write(`data: ${JSON.stringify(event)}\n\n`);
-          } catch {
-            // skip unparseable lines
-          }
+        res.writeHead(200, {
+          ...corsHeaders(),
+          "content-type": "text/event-stream",
+          "cache-control": "no-cache",
+          connection: "keep-alive",
+        });
+
+        const args: string[] = [
+          "-p",
+          body.message,
+          "--output-format",
+          "stream-json",
+          "--verbose",
+        ];
+
+        if (body.sessionId) args.push("--resume", body.sessionId);
+        if (body.model) args.push("--model", body.model);
+        if (body.mode) args.push("--permission-mode", body.mode);
+        if (body.effort) args.push("--effort", body.effort);
+        if (body.maxBudget !== undefined && body.maxBudget !== null) {
+          args.push("--max-budget-usd", String(body.maxBudget));
         }
-      });
-
-      child.stderr.on("data", (chunk: Buffer) => {
-        const text = chunk.toString().trim();
-        if (text) {
-          res.write(
-            `data: ${JSON.stringify({ type: "error", error: text })}\n\n`,
-          );
-        }
-      });
-
-      child.on("close", (code) => {
-        activeProcesses.delete(requestId);
-
-        if (lineBuffer.trim()) {
-          try {
-            const event = JSON.parse(lineBuffer.trim());
-            if (event.session_id) lastSessionId = event.session_id;
-            res.write(`data: ${JSON.stringify(event)}\n\n`);
-          } catch {
-            // skip
-          }
+        if (body.systemPrompt) {
+          args.push("--append-system-prompt", body.systemPrompt);
         }
 
-        const duration = Date.now() - startTime;
+        const env = cleanEnv();
+        const child = spawn(CLAUDE_PATH, args, {
+          env,
+          cwd: "/tmp",
+          stdio: ["ignore", "pipe", "pipe"],
+        });
+
+        activeProcesses.set(requestId, child);
+
+        state
+          .update({
+            scope: "active_chats",
+            key: requestId,
+            ops: [{ type: "set", path: "pid", value: child.pid ?? null }],
+          })
+          .catch(() => {});
+
+        const startTime = Date.now();
+
         res.write(
-          `event: done\ndata: ${JSON.stringify({
+          `data: ${JSON.stringify({ type: "request_id", requestId })}\n\n`,
+        );
+
+        let lastSessionId: string | null = body.sessionId || null;
+        let lineBuffer = "";
+        let eventIndex = 0;
+        let totalCost = 0;
+        let inputTokens = 0;
+        let outputTokens = 0;
+
+        child.stdout.on("data", (chunk: Buffer) => {
+          lineBuffer += chunk.toString();
+          const lines = lineBuffer.split("\n");
+          lineBuffer = lines.pop() || "";
+
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed) continue;
+
+            try {
+              const event = JSON.parse(trimmed);
+              if (event.session_id) lastSessionId = event.session_id;
+
+              if (event.type === "result") {
+                totalCost = event.cost_usd ?? event.total_cost_usd ?? totalCost;
+                inputTokens = event.input_tokens ?? inputTokens;
+                outputTokens = event.output_tokens ?? outputTokens;
+              }
+
+              writeChatEvent(requestId, eventIndex++, event);
+              res.write(`data: ${JSON.stringify(event)}\n\n`);
+            } catch {
+              // skip unparseable lines
+            }
+          }
+        });
+
+        child.stderr.on("data", (chunk: Buffer) => {
+          const text = chunk.toString().trim();
+          if (text) {
+            const errEvent = { type: "error", error: text };
+            writeChatEvent(requestId, eventIndex++, errEvent);
+            res.write(`data: ${JSON.stringify(errEvent)}\n\n`);
+          }
+        });
+
+        child.on("close", (code) => {
+          activeProcesses.delete(requestId);
+
+          if (lineBuffer.trim()) {
+            try {
+              const event = JSON.parse(lineBuffer.trim());
+              if (event.session_id) lastSessionId = event.session_id;
+              if (event.type === "result") {
+                totalCost = event.cost_usd ?? event.total_cost_usd ?? totalCost;
+                inputTokens = event.input_tokens ?? inputTokens;
+                outputTokens = event.output_tokens ?? outputTokens;
+              }
+              writeChatEvent(requestId, eventIndex++, event);
+              res.write(`data: ${JSON.stringify(event)}\n\n`);
+            } catch {
+              // skip
+            }
+          }
+
+          const duration = Date.now() - startTime;
+
+          span.setAttribute("chat.cost_usd", totalCost);
+          span.setAttribute("chat.tokens.input", inputTokens);
+          span.setAttribute("chat.tokens.output", outputTokens);
+          span.setAttribute("chat.duration_ms", duration);
+          span.setAttribute("chat.exit_code", code ?? -1);
+
+          logger.info("Chat completed", {
+            requestId,
             sessionId: lastSessionId,
+            model,
+            cost: totalCost,
+            inputTokens,
+            outputTokens,
             duration,
             exitCode: code,
-          })}\n\n`,
-        );
-        res.end();
-      });
+          });
 
-      child.on("error", (err) => {
-        activeProcesses.delete(requestId);
-        res.write(
-          `data: ${JSON.stringify({ type: "error", error: err.message })}\n\n`,
-        );
-        res.write(
-          `event: done\ndata: ${JSON.stringify({ error: err.message })}\n\n`,
-        );
-        res.end();
-      });
+          state.delete({ scope: "active_chats", key: requestId });
 
-      req.on("close", () => {
-        if (!child.killed && child.exitCode === null) {
-          child.kill("SIGTERM");
+          emit("chat::completed", {
+            requestId,
+            sessionId: lastSessionId,
+            model,
+            cost: totalCost,
+            inputTokens,
+            outputTokens,
+            duration,
+          });
+
+          deleteChatGroup(requestId);
+
+          res.write(
+            `event: done\ndata: ${JSON.stringify({
+              sessionId: lastSessionId,
+              duration,
+              exitCode: code,
+            })}\n\n`,
+          );
+          res.end();
+        });
+
+        child.on("error", (err) => {
           activeProcesses.delete(requestId);
-        }
+          state.delete({ scope: "active_chats", key: requestId });
+
+          span.setAttribute("chat.error", err.message);
+          logger.error("Chat failed", { requestId, error: err.message });
+
+          res.write(
+            `data: ${JSON.stringify({ type: "error", error: err.message })}\n\n`,
+          );
+          res.write(
+            `event: done\ndata: ${JSON.stringify({ error: err.message })}\n\n`,
+          );
+          res.end();
+        });
+
+        req.on("close", () => {
+          if (!child.killed && child.exitCode === null) {
+            child.kill("SIGTERM");
+            activeProcesses.delete(requestId);
+            state.delete({ scope: "active_chats", key: requestId });
+
+            logger.info("Chat stopped (client disconnect)", { requestId });
+            emit("chat::stopped", { requestId, reason: "client_disconnect" });
+          }
+        });
+      }).catch((err) => {
+        logger.error("Chat span error", { error: err?.message });
+        if (!res.headersSent) jsonError(res, 500, "Internal error");
       });
     })
     .catch(() => {
@@ -346,6 +469,11 @@ function handleStopChat(req: IncomingMessage, res: ServerResponse): void {
         if (child && !child.killed) {
           child.kill("SIGTERM");
           activeProcesses.delete(requestId);
+          state.delete({ scope: "active_chats", key: requestId });
+
+          logger.info("Chat stopped by user", { requestId });
+          emit("chat::stopped", { requestId, reason: "user" });
+
           res.writeHead(200, {
             ...corsHeaders(),
             "content-type": "application/json",
@@ -365,103 +493,57 @@ function handleStopChat(req: IncomingMessage, res: ServerResponse): void {
     });
 }
 
-interface TerminalSession {
-  id: string;
-  source: "terminal";
-  lastUsed: string;
-  project?: string;
-  messageCount?: number;
-  slug?: string;
+interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+  tools?: string[];
 }
 
-function discoverTerminalSessions(): TerminalSession[] {
-  const sessions: TerminalSession[] = [];
+async function handleSessions(
+  _req: IncomingMessage,
+  res: ServerResponse,
+): Promise<void> {
+  const indexed = await getSessionIndex();
+  const terminalSessions = indexed.slice(0, 50).map((s) => ({
+    id: s.id,
+    source: "terminal" as const,
+    lastUsed: s.lastModified,
+    project: s.project,
+    messageCount: s.messageCount || undefined,
+    slug: s.slug,
+  }));
+
+  let webSessions: Array<{
+    id: string;
+    source: "web";
+    model: string;
+    createdAt: string;
+    lastUsed: string;
+    messageCount: number;
+  }> = [];
 
   try {
-    const projects = readdirSync(PROJECTS_DIR, { withFileTypes: true });
-    for (const projEntry of projects) {
-      if (!projEntry.isDirectory()) continue;
-
-      const projDir = join(PROJECTS_DIR, projEntry.name);
-      const projectName = extractProjectName(projEntry.name);
-
-      try {
-        const files = readdirSync(projDir);
-        const jsonlFiles = files.filter(
-          (f) => f.endsWith(".jsonl") && !f.includes("memory"),
-        );
-
-        for (const file of jsonlFiles) {
-          const filePath = join(projDir, file);
-          try {
-            const stat = statSync(filePath);
-            if (stat.size < 50) continue;
-            const sessionId = file.replace(".jsonl", "");
-
-            let project: string | undefined = projectName;
-            let messageCount = 0;
-            let slug: string | undefined;
-
-            const fd = openSync(filePath, "r");
-            const buf = Buffer.alloc(8192);
-            const bytesRead = readSync(fd, buf, 0, 8192, 0);
-            closeSync(fd);
-            const head = buf.toString("utf-8", 0, bytesRead);
-            const lines = head.split("\n").filter((l: string) => l.trim());
-
-            for (const line of lines) {
-              try {
-                const parsed = JSON.parse(line);
-                if (parsed.cwd && !project) {
-                  project = parsed.cwd.split("/").pop() || project;
-                }
-                if (parsed.slug && !slug) {
-                  slug = parsed.slug;
-                }
-                const role = parsed.message?.role;
-                if (role === "user" || role === "assistant") {
-                  messageCount++;
-                }
-              } catch {
-                // skip
-              }
-            }
-
-            sessions.push({
-              id: sessionId,
-              source: "terminal",
-              lastUsed: stat.mtime.toISOString(),
-              project,
-              messageCount: messageCount || undefined,
-              slug,
-            });
-          } catch {
-            // skip unreadable files
-          }
-        }
-      } catch {
-        // skip unreadable project dirs
-      }
+    const raw = await fetchFromEngine("/sessions");
+    const parsed = JSON.parse(raw);
+    if (parsed.sessions) {
+      webSessions = parsed.sessions.map((s: Record<string, unknown>) => ({
+        ...s,
+        source: "web",
+      }));
     }
   } catch {
-    // projects directory doesn't exist
+    // iii engine unavailable
   }
 
-  sessions.sort(
+  const all = [...webSessions, ...terminalSessions].sort(
     (a, b) => new Date(b.lastUsed).getTime() - new Date(a.lastUsed).getTime(),
   );
 
-  return sessions.slice(0, 50);
-}
-
-function extractProjectName(dirName: string): string {
-  const cleaned = dirName.replace(/^-/, "");
-  const parts = cleaned.split("-");
-  if (parts.length <= 2) return parts.pop() || dirName;
-  const meaningful = parts.filter(
-    (p) => p !== "Users" && p !== "private" && p !== "tmp" && p.length > 1,
-  );
-  return meaningful.pop() || parts.pop() || dirName;
+  res.writeHead(200, {
+    ...corsHeaders(),
+    "content-type": "application/json",
+  });
+  res.end(JSON.stringify({ sessions: all, count: all.length }));
 }
 
 function fetchFromEngine(path: string): Promise<string> {
@@ -485,77 +567,36 @@ function fetchFromEngine(path: string): Promise<string> {
   });
 }
 
-async function handleSessions(
-  _req: IncomingMessage,
-  res: ServerResponse,
-): Promise<void> {
-  const terminalSessions = discoverTerminalSessions();
-
-  let webSessions: Array<{
-    id: string;
-    source: "web";
-    model: string;
-    createdAt: string;
-    lastUsed: string;
-    messageCount: number;
-  }> = [];
-
-  try {
-    const raw = await fetchFromEngine("/sessions");
-    const parsed = JSON.parse(raw);
-    if (parsed.sessions) {
-      webSessions = parsed.sessions.map((s: Record<string, unknown>) => ({
-        ...s,
-        source: "web",
-      }));
-    }
-  } catch {
-    // iii engine unavailable or no web sessions
-  }
-
-  const all = [...webSessions, ...terminalSessions].sort(
-    (a, b) => new Date(b.lastUsed).getTime() - new Date(a.lastUsed).getTime(),
-  );
-
-  res.writeHead(200, {
-    ...corsHeaders(),
-    "content-type": "application/json",
-  });
-  res.end(JSON.stringify({ sessions: all, count: all.length }));
-}
-
-interface ChatMessage {
-  role: "user" | "assistant";
-  content: string;
-  tools?: string[];
-}
-
-function handleSessionHistory(
+async function handleSessionHistory(
   _req: IncomingMessage,
   res: ServerResponse,
   sessionId: string,
-): void {
+): Promise<void> {
   if (!/^[a-f0-9-]{36}$/.test(sessionId)) {
     jsonError(res, 400, "Invalid session ID");
     return;
   }
 
-  let filePath: string | null = null;
-  try {
-    const projects = readdirSync(PROJECTS_DIR, { withFileTypes: true });
-    for (const proj of projects) {
-      if (!proj.isDirectory()) continue;
-      const candidate = join(PROJECTS_DIR, proj.name, `${sessionId}.jsonl`);
-      try {
-        statSync(candidate);
-        filePath = candidate;
-        break;
-      } catch {
-        // not in this project
+  let filePath = await getSessionFilePath(sessionId);
+
+  if (!filePath) {
+    const projectsDir = join(homedir(), ".claude", "projects");
+    try {
+      const projects = readdirSync(projectsDir, { withFileTypes: true });
+      for (const proj of projects) {
+        if (!proj.isDirectory()) continue;
+        const candidate = join(projectsDir, proj.name, `${sessionId}.jsonl`);
+        try {
+          statSync(candidate);
+          filePath = candidate;
+          break;
+        } catch {
+          // not in this project
+        }
       }
+    } catch {
+      // projects dir unreadable
     }
-  } catch {
-    // projects dir unreadable
   }
 
   if (!filePath) {
@@ -637,7 +678,7 @@ async function handleQr(
   res: ServerResponse,
 ): Promise<void> {
   const host = req.headers.host;
-  let url = host ? `https://${host}` : await getTailscaleUrl();
+  const url = host ? `https://${host}` : await getTailscaleUrl();
 
   try {
     const svg = await QRCode.toString(url, { type: "svg", margin: 2 });
@@ -689,7 +730,19 @@ async function handleHealth(
   res: ServerResponse,
 ): Promise<void> {
   const tsUrl = await getTailscaleUrl();
-  const sessions = discoverTerminalSessions();
+
+  let activeChats: unknown[] = [];
+  let sessionCount = 0;
+  try {
+    [activeChats, sessionCount] = await Promise.all([
+      state.list({ scope: "active_chats" }),
+      getSessionIndex().then((s) => s.length),
+    ]);
+  } catch {
+    // state unavailable
+  }
+
+  const workerMetrics = metricsCollector.collect();
 
   res.writeHead(200, {
     ...corsHeaders(),
@@ -701,7 +754,22 @@ async function handleHealth(
       version: "0.1.0",
       uptime: process.uptime(),
       publishedUrl: tsUrl.includes("tailclaude.local") ? null : tsUrl,
-      sessions: { active: activeProcesses.size, total: sessions.length },
+      engine: {
+        connected: engineConnected,
+        state: engineConnectionState,
+      },
+      sessions: {
+        active: activeProcesses.size,
+        activeFromState: activeChats.length,
+        total: sessionCount,
+      },
+      worker: {
+        memory_heap_used: workerMetrics.memory_heap_used,
+        memory_rss: workerMetrics.memory_rss,
+        cpu_percent: workerMetrics.cpu_percent,
+        event_loop_lag_ms: workerMetrics.event_loop_lag_ms,
+        uptime_seconds: workerMetrics.uptime_seconds,
+      },
     }),
   );
 }
@@ -710,9 +778,7 @@ let server: Server | null = null;
 
 export function startProxy(): Promise<void> {
   if (!API_TOKEN) {
-    console.warn(
-      "WARNING: No TAILCLAUDE_TOKEN set — proxy is open to all tailnet peers",
-    );
+    logger.warn("No TAILCLAUDE_TOKEN set — proxy is open to all tailnet peers");
   }
 
   return new Promise((resolve, reject) => {
@@ -775,7 +841,11 @@ export function startProxy(): Promise<void> {
       const sessionMatch =
         method === "GET" && url.match(/^\/sessions\/([a-f0-9-]{36})$/);
       if (sessionMatch) {
-        handleSessionHistory(req, res, sessionMatch[1]);
+        handleSessionHistory(req, res, sessionMatch[1]).catch(() => {
+          if (!res.headersSent) {
+            jsonError(res, 500, "Failed to load session");
+          }
+        });
         return;
       }
 
@@ -820,7 +890,7 @@ export function startProxy(): Promise<void> {
     });
 
     server.listen(PROXY_PORT, "127.0.0.1", () => {
-      console.log(`UI proxy listening on http://127.0.0.1:${PROXY_PORT}`);
+      logger.info("UI proxy listening", { port: PROXY_PORT });
       resolve();
     });
 
@@ -830,6 +900,7 @@ export function startProxy(): Promise<void> {
 
 export function stopProxy(): Promise<void> {
   return new Promise((resolve) => {
+    metricsCollector.stopMonitoring();
     if (server) {
       server.close(() => resolve());
     } else {
