@@ -14,7 +14,7 @@ TailClaude publishes a multi-session Claude Code interface to every device on yo
                            │ HTTPS (auto-cert via Tailscale)
                            ▼
 ┌──────────────────────────────────────────────────────────────────┐
-│  tailscale serve :443 → http://127.0.0.1:3111                   │
+│  tailscale serve :443 → http://127.0.0.1:3111                    │
 └──────────────────────────┬───────────────────────────────────────┘
                            │
                            ▼
@@ -35,10 +35,10 @@ TailClaude publishes a multi-session Claude Code interface to every device on yo
 ┌──────────────────────────────────────────────────────────────────┐
 │  iii engine                                                      │
 │                                                                  │
-│  ┌────────────┐ ┌──────────┐ ┌────────┐ ┌──────┐ ┌────────────┐│
-│  │   State    │ │  Queue   │ │ PubSub │ │ Cron │ │    Otel    ││
-│  │  (KV/file) │ │(builtin) │ │(local) │ │ (KV) │ │  (memory)  ││
-│  └────────────┘ └──────────┘ └────────┘ └──────┘ └────────────┘│
+│  ┌────────────┐ ┌──────────┐ ┌────────┐ ┌──────┐ ┌────────────┐  │
+│  │   State    │ │  Queue   │ │ PubSub │ │ Cron │ │    Otel    │  │
+│  │  (KV/file) │ │(builtin) │ │(local) │ │ (KV) │ │  (memory)  │  │
+│  └────────────┘ └──────────┘ └────────┘ └──────┘ └────────────┘  │
 └──────────────────────────────────────────────────────────────────┘
                            │
                            ▼
