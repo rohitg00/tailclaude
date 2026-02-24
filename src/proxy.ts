@@ -87,7 +87,12 @@ function getTailscaleUrl(): Promise<string> {
 function cleanEnv(): Record<string, string> {
   const env: Record<string, string> = {};
   for (const [key, val] of Object.entries(process.env)) {
-    if (val && !key.startsWith("CLAUDE") && !key.startsWith("III_")) {
+    if (
+      val &&
+      !key.startsWith("CLAUDE") &&
+      !key.startsWith("III_") &&
+      key !== "TAILCLAUDE_TOKEN"
+    ) {
       env[key] = val;
     }
   }
@@ -224,7 +229,7 @@ function handleChat(req: IncomingMessage, res: ServerResponse): void {
       if (body.effort) {
         args.push("--effort", body.effort);
       }
-      if (body.maxBudget) {
+      if (body.maxBudget !== undefined && body.maxBudget !== null) {
         args.push("--max-budget-usd", String(body.maxBudget));
       }
       if (body.systemPrompt) {
@@ -315,7 +320,7 @@ function handleChat(req: IncomingMessage, res: ServerResponse): void {
       });
 
       req.on("close", () => {
-        if (!child.killed) {
+        if (!child.killed && child.exitCode === null) {
           child.kill("SIGTERM");
           activeProcesses.delete(requestId);
         }
@@ -693,7 +698,7 @@ async function handleHealth(
   res.end(
     JSON.stringify({
       status: "ok",
-      version: "2.0.0",
+      version: "0.1.0",
       uptime: process.uptime(),
       publishedUrl: tsUrl.includes("tailclaude.local") ? null : tsUrl,
       sessions: { active: activeProcesses.size, total: sessions.length },

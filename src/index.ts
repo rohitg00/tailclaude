@@ -26,5 +26,5 @@ useCron(
 registerShutdownHandlers();
 
 console.log(
-  "TailClaude v2 worker registered — waiting for iii engine connection",
+  "TailClaude v0.1 worker registered — waiting for iii engine connection",
 );

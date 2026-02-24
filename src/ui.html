@@ -133,7 +133,7 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sy
       <div class="actions">
         <button class="icon-btn" id="qrBtn" title="QR Code">&#9641;</button>
         <button class="icon-btn" id="settingsBtn" title="Settings">&#9881;</button>
-        <span>v2</span>
+        <span>v0.1</span>
       </div>
     </div>
     <div class="controls">
@@ -178,7 +178,7 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sy
     </div>
     <div class="messages" id="messages">
       <div class="empty">
-        <h2>TailClaude v2</h2>
+        <h2>TailClaude v0.1</h2>
         <p>Claude Code on your tailnet with streaming, session sharing, and full controls</p>
         <p style="font-size:12px">Click "+ New Chat" or resume a terminal session from the sidebar</p>
       </div>
@@ -334,7 +334,10 @@ function toggleSidebar(show) {
 }
 
 $menuBtn.onclick = () => toggleSidebar()
-$overlay.onclick = () => toggleSidebar(false)
+$overlay.onclick = () => {
+  hideModals()
+  toggleSidebar(false)
+}
 
 function showModal(id) {
   document.querySelectorAll('.modal').forEach(m => m.style.display = 'none')
@@ -394,16 +397,23 @@ async function loadSettings() {
 }
 
 async function loadQr() {
-  $('#qrImage').innerHTML = '<img src="/qr" width="200" height="200" alt="QR code">'
+  try {
+    const res = await fetch('/qr', { headers: authHeaders() })
+    if (res.ok) {
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      $('#qrImage').innerHTML = `<img src="${url}" width="200" height="200" alt="QR code">`
+    } else {
+      $('#qrImage').innerHTML = '<div style="color:var(--danger)">Failed to load QR</div>'
+    }
+  } catch {
+    $('#qrImage').innerHTML = '<div style="color:var(--danger)">Failed to load QR</div>'
+  }
   try {
     const healthRes = await fetch('/health', { headers: authHeaders() })
     if (healthRes.ok) {
       const health = await healthRes.json()
-      if (health.publishedUrl) {
-        $('#qrUrl').textContent = health.publishedUrl
-      } else {
-        $('#qrUrl').textContent = location.origin
-      }
+      $('#qrUrl').textContent = health.publishedUrl || location.origin
     }
   } catch {
     $('#qrUrl').textContent = location.origin
@@ -469,10 +479,11 @@ async function loadSessions() {
 }
 
 function displayName(session) {
-  if (sessionNames[session.id]) return sessionNames[session.id]
+  if (session.id && sessionNames[session.id]) return sessionNames[session.id]
   if (session.slug) return session.slug
   if (session.project) return session.project
-  return session.id.slice(0, 8)
+  if (session.id) return session.id.slice(0, 8)
+  return 'New Chat'
 }
 
 function formatDate(iso) {
@@ -502,7 +513,7 @@ function renderSessions() {
         <span class="session-meta">${escapeHtml(date)}${msgCount ? ' · ' + msgCount : ''}</span>
       </div>
       <div class="badges">
-        <span class="source-badge ${source}">${source}</span>
+        <span class="source-badge ${escapeHtml(source)}">${escapeHtml(source)}</span>
       </div>
     </div>`
   }).join('')
@@ -856,6 +867,8 @@ function finishStream(el, duration) {
 }
 
 $stop.onclick = async () => {
+  $stop.textContent = 'Stopping...'
+  $stop.disabled = true
   if (currentRequestId) {
     try {
       await fetch('/chat/stop', {
@@ -865,6 +878,10 @@ $stop.onclick = async () => {
       })
     } catch {}
   }
+  setTimeout(() => {
+    $stop.textContent = 'Stop'
+    $stop.disabled = false
+  }, 1000)
 }
 
 function addMessage(role, text, meta = {}) {

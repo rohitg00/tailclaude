@@ -20,7 +20,7 @@ TailClaude takes a different approach: **open a browser, start chatting**.
 | **Client** | Termius app (SSH terminal) | Any browser |
 | **Setup on phone** | Install Tailscale + Termius, configure SSH | Scan QR code |
 | **Session persistence** | tmux keeps terminal alive | iii engine state store |
-| **Interface** | Full terminal emulator | Web chat UI with markdown |
+| **Interface** | Full terminal emulator | Web chat UI with Markdown |
 | **Session sharing** | `tmux attach` (terminal only) | Browse ALL sessions (terminal + web) |
 | **Model switching** | Edit CLI flags manually | Dropdown menu (Opus, Sonnet, Haiku) |
 | **Mobile experience** | Tiny terminal, keyboard shortcuts | Touch-optimized responsive UI |
