@@ -111,18 +111,24 @@ async function doIndexSessions(): Promise<void> {
     // projects directory doesn't exist
   }
 
+  let added = 0;
   for (const entry of entries) {
-    await state.set({
-      scope: "session_index",
-      key: entry.id,
-      data: entry,
-    });
+    try {
+      await state.set({
+        scope: "session_index",
+        key: entry.id,
+        data: entry,
+      });
+      added++;
+    } catch {
+      // continue persisting remaining entries
+    }
   }
 
   await emit("session::indexed", {
     total: entries.length,
-    added: entries.length,
-  });
+    added,
+  }).catch(() => {});
 }
 
 export async function getSessionIndex(): Promise<SessionIndexEntry[]> {

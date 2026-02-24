@@ -59,12 +59,6 @@ let engineConnected = false;
 let engineConnectionState = "disconnected";
 let unsubEngineState: (() => void) | undefined;
 
-unsubEngineState = onEngineConnectionStateChange((s) => {
-  engineConnected = s === "connected";
-  engineConnectionState = s;
-  logger.info("Engine connection state changed", { state: s });
-});
-
 function loadHtml(): string {
   if (!cachedHtml || !isProduction) {
     cachedHtml = readFileSync(resolve(__dirname, "ui.html"), "utf-8");
@@ -246,19 +240,17 @@ function handleChat(req: IncomingMessage, res: ServerResponse): void {
           effort,
         });
 
-        try {
-          emit("chat::started", {
-            requestId,
-            sessionId: body.sessionId || null,
-            model,
-            mode,
-            effort,
-          });
-        } catch (e) {
+        emit("chat::started", {
+          requestId,
+          sessionId: body.sessionId || null,
+          model,
+          mode,
+          effort,
+        }).catch((e) => {
           logger.error("Failed to emit chat::started", {
             error: (e as Error)?.message,
           });
-        }
+        });
 
         try {
           await state.set({
@@ -323,17 +315,6 @@ function handleChat(req: IncomingMessage, res: ServerResponse): void {
         const startTime = Date.now();
         let clientDisconnected = false;
 
-        res.write(
-          `data: ${JSON.stringify({ type: "request_id", requestId })}\n\n`,
-        );
-
-        let lastSessionId: string | null = body.sessionId || null;
-        let lineBuffer = "";
-        let eventIndex = 0;
-        let totalCost = 0;
-        let inputTokens = 0;
-        let outputTokens = 0;
-
         function safeWrite(data: string): boolean {
           if (clientDisconnected || res.writableEnded || res.destroyed)
             return false;
@@ -344,6 +325,17 @@ function handleChat(req: IncomingMessage, res: ServerResponse): void {
             return false;
           }
         }
+
+        safeWrite(
+          `data: ${JSON.stringify({ type: "request_id", requestId })}\n\n`,
+        );
+
+        let lastSessionId: string | null = body.sessionId || null;
+        let lineBuffer = "";
+        let eventIndex = 0;
+        let totalCost = 0;
+        let inputTokens = 0;
+        let outputTokens = 0;
 
         child.stdout.on("data", (chunk: Buffer) => {
           lineBuffer += chunk.toString();
@@ -433,7 +425,7 @@ function handleChat(req: IncomingMessage, res: ServerResponse): void {
             inputTokens,
             outputTokens,
             duration,
-          });
+          }).catch(() => {});
 
           deleteChatGroup(requestId);
 
@@ -463,7 +455,9 @@ function handleChat(req: IncomingMessage, res: ServerResponse): void {
           span.setAttribute("chat.status", "error");
           logger.error("Chat failed", { requestId, error: err.message });
 
-          emit("chat::stopped", { requestId, reason: "spawn_error" });
+          emit("chat::stopped", { requestId, reason: "spawn_error" }).catch(
+            () => {},
+          );
 
           if (
             safeWrite(
@@ -487,7 +481,10 @@ function handleChat(req: IncomingMessage, res: ServerResponse): void {
               .catch(() => {});
 
             logger.info("Chat stopped (client disconnect)", { requestId });
-            emit("chat::stopped", { requestId, reason: "client_disconnect" });
+            emit("chat::stopped", {
+              requestId,
+              reason: "client_disconnect",
+            }).catch(() => {});
           }
         });
       }).catch((err) => {
@@ -520,7 +517,7 @@ function handleStopChat(req: IncomingMessage, res: ServerResponse): void {
             .catch(() => {});
 
           logger.info("Chat stopped by user", { requestId });
-          emit("chat::stopped", { requestId, reason: "user" });
+          emit("chat::stopped", { requestId, reason: "user" }).catch(() => {});
 
           res.writeHead(200, {
             ...corsHeaders(),
@@ -825,6 +822,12 @@ async function handleHealth(
 let server: Server | null = null;
 
 export function startProxy(): Promise<void> {
+  unsubEngineState = onEngineConnectionStateChange((s) => {
+    engineConnected = s === "connected";
+    engineConnectionState = s;
+    logger.info("Engine connection state changed", { state: s });
+  });
+
   if (!API_TOKEN) {
     logger.warn("No TAILCLAUDE_TOKEN set — proxy is open to all tailnet peers");
   }

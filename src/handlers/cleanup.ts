@@ -80,7 +80,13 @@ export const handleCleanup = async (_ctx: Context): Promise<void> => {
     // session index cleanup failed
   }
 
-  removedStreams = cleanupStaleStreams();
+  try {
+    removedStreams = cleanupStaleStreams();
+  } catch (err) {
+    logger.error("Failed to cleanup stale streams", {
+      error: (err as Error)?.message,
+    });
+  }
 
   const total =
     removedSessions + removedActiveChats + removedSessionIndex + removedStreams;
@@ -94,11 +100,17 @@ export const handleCleanup = async (_ctx: Context): Promise<void> => {
     });
   }
 
-  await emit("cleanup::completed", {
-    removedSessions,
-    removedActiveChats,
-    removedSessionIndex,
-    removedStreams,
-    total,
-  });
+  try {
+    await emit("cleanup::completed", {
+      removedSessions,
+      removedActiveChats,
+      removedSessionIndex,
+      removedStreams,
+      total,
+    });
+  } catch (err) {
+    logger.error("Failed to emit cleanup::completed", {
+      error: (err as Error)?.message,
+    });
+  }
 };

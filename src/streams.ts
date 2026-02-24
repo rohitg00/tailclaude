@@ -57,7 +57,7 @@ const chatStream: IStream<ChatEvent> = {
   },
 
   async list({ group_id }) {
-    const group = store.get(group_id);
+    const group = refreshGroup(group_id);
     if (!group) return [];
     return Array.from(group.values()).sort((a, b) => a.timestamp - b.timestamp);
   },
@@ -67,7 +67,7 @@ const chatStream: IStream<ChatEvent> = {
   },
 
   async update({ group_id, item_id, ops }) {
-    const group = store.get(group_id);
+    const group = refreshGroup(group_id);
     if (!group) return null;
     const existing = group.get(item_id);
     if (!existing) return null;
