@@ -651,6 +651,8 @@ async function streamMessage(message, isInit) {
 
   streamedText = ''
   streamedTools = []
+  totalCost = 0
+  $costDisplay.textContent = ''
   const loadingEl = addLoading()
 
   const requestBody = {
@@ -750,8 +752,12 @@ async function streamMessage(message, isInit) {
                 }
                 if (block.type === 'tool_use' && block.name) {
                   if (!streamedTools.includes(block.name)) {
+                    if (!msgEl) {
+                      if (firstToken) { loadingEl.remove(); firstToken = false }
+                      msgEl = addStreamingMessage()
+                    }
                     streamedTools.push(block.name)
-                    if (msgEl) addToolBadge(msgEl, block.name)
+                    addToolBadge(msgEl, block.name)
                   }
                 }
               }
@@ -786,8 +792,9 @@ async function streamMessage(message, isInit) {
               firstToken = false
               appendToStream(msgEl, event.result)
             }
-            if (event.total_cost_usd !== undefined) {
-              totalCost = parseFloat(event.total_cost_usd)
+            if (event.total_cost_usd !== undefined && event.total_cost_usd !== null) {
+              const parsed = parseFloat(event.total_cost_usd)
+              if (Number.isFinite(parsed)) totalCost = parsed
             }
             const usage = event.usage || {}
             const inp = (usage.input_tokens || 0) + (usage.cache_read_input_tokens || 0) + (usage.cache_creation_input_tokens || 0)
