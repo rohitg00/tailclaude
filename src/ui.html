@@ -6,7 +6,7 @@
 <title>TailClaude</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-:root{--bg:#0a0a0a;--surface:#141414;--border:#252525;--text:#e4e4e7;--muted:#71717a;--accent:#a78bfa;--accent-dim:#7c3aed;--user-bg:#1e1b4b;--assistant-bg:#1a1a1a;--code-bg:#1e1e2e;--danger:#ef4444;--success:#22c55e;--warning:#f59e0b}
+:root{--bg:#0a0a0a;--surface:#141414;--border:#252525;--text:#e4e4e7;--muted:#71717a;--accent:#a78bfa;--accent-dim:#7c3aed;--user-bg:#1e1b4b;--assistant-bg:#1a1a1a;--code-bg:#1e1e2e;--danger:#ef4444;--success:#22c55e;--warning:#f59e0b;--info:#60a5fa}
 html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text)}
 #app{display:flex;height:100vh;height:100dvh}
 
@@ -17,6 +17,7 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sy
 .sidebar-header span{font-size:11px;color:var(--muted);background:var(--bg);padding:2px 8px;border-radius:10px}
 .icon-btn{background:none;border:1px solid var(--border);color:var(--muted);width:30px;height:30px;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;transition:all .15s}
 .icon-btn:hover{color:var(--text);border-color:var(--muted);background:var(--bg)}
+.icon-btn.active{color:var(--accent);border-color:var(--accent)}
 
 .controls{padding:12px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:8px}
 .control-row{display:flex;gap:8px;align-items:center}
@@ -48,7 +49,12 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sy
 .tailscale-url.visible{display:block}
 .tailscale-url a{color:var(--accent);text-decoration:none}
 
-.main{flex:1;display:flex;flex-direction:column;min-width:0}
+.main{flex:1;display:flex;flex-direction:column;min-width:0;position:relative}
+.alert-banner{display:none;padding:8px 16px;background:#7f1d1d;color:#fca5a5;font-size:12px;font-weight:500;text-align:center;border-bottom:1px solid #991b1b;animation:slideDown .2s ease}
+.alert-banner.visible{display:flex;align-items:center;justify-content:center;gap:8px}
+.alert-banner .alert-dismiss{background:none;border:none;color:#fca5a5;cursor:pointer;font-size:14px;padding:0 4px}
+@keyframes slideDown{from{opacity:0;transform:translateY(-100%)}to{opacity:1;transform:translateY(0)}}
+
 .topbar{padding:12px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;font-size:13px;color:var(--muted)}
 .hamburger{display:none;background:none;border:none;color:var(--text);font-size:20px;cursor:pointer;padding:4px 8px;border-radius:6px;line-height:1}
 .hamburger:hover{background:var(--border)}
@@ -57,6 +63,14 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sy
 .topbar .model{background:var(--accent-dim);color:#fff}
 .topbar .mode-badge{background:#1e3a5f;color:#60a5fa}
 .topbar .effort-badge{background:#3a2a1a;color:var(--warning)}
+
+.tab-bar{display:flex;border-bottom:1px solid var(--border);background:var(--surface);overflow-x:auto}
+.tab-btn{padding:8px 16px;font-size:12px;color:var(--muted);background:none;border:none;border-bottom:2px solid transparent;cursor:pointer;white-space:nowrap;transition:all .15s}
+.tab-btn:hover{color:var(--text);background:var(--bg)}
+.tab-btn.active{color:var(--accent);border-bottom-color:var(--accent)}
+
+.tab-content{display:none;flex:1;overflow-y:auto}
+.tab-content.active{display:flex;flex-direction:column}
 
 .messages{flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:16px;-webkit-overflow-scrolling:touch}
 .msg{max-width:720px;width:100%;margin:0 auto;padding:12px 16px;border-radius:12px;font-size:14px;line-height:1.65}
@@ -73,6 +87,10 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sy
 .tools-used{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
 .tool-badge{font-size:11px;background:var(--border);color:var(--muted);padding:2px 8px;border-radius:6px;animation:fadeIn .2s ease}
 @keyframes fadeIn{from{opacity:0;transform:scale(.9)}to{opacity:1;transform:scale(1)}}
+
+.reconnect-banner{display:none;padding:6px 16px;background:#1e3a5f;color:var(--info);font-size:12px;text-align:center;border-radius:8px;margin:8px 20px 0}
+.reconnect-banner.visible{display:block}
+
 .input-area{padding:12px 20px;border-top:1px solid var(--border);background:var(--surface)}
 .input-wrap{max-width:720px;margin:0 auto;display:flex;gap:8px;align-items:flex-end}
 .input-wrap textarea{flex:1;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px 14px;color:var(--text);font-size:16px;font-family:inherit;resize:none;min-height:42px;max-height:200px;line-height:1.5;outline:none;transition:border-color .15s}
@@ -91,6 +109,60 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sy
 .loading span:nth-child(2){animation-delay:.15s}
 .loading span:nth-child(3){animation-delay:.3s}
 @keyframes bounce{to{opacity:.3;transform:translateY(-6px)}}
+
+.activity-sidebar{width:300px;background:var(--surface);border-left:1px solid var(--border);display:none;flex-direction:column;flex-shrink:0;transition:all .2s ease}
+.activity-sidebar.open{display:flex}
+.activity-header{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.activity-header h3{font-size:13px;font-weight:600}
+.activity-header .badge-count{font-size:10px;background:var(--accent-dim);color:#fff;padding:1px 6px;border-radius:8px;display:none}
+.activity-header .badge-count.visible{display:inline}
+.activity-list{flex:1;overflow-y:auto;padding:8px}
+.activity-item{padding:8px 10px;border-radius:6px;font-size:12px;margin-bottom:4px;display:flex;gap:8px;align-items:flex-start;animation:fadeIn .2s ease}
+.activity-item .activity-icon{width:18px;height:18px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0;margin-top:1px}
+.activity-icon.chat_started{background:#1e3a5f;color:var(--info)}
+.activity-icon.chat_completed{background:#14532d;color:var(--success)}
+.activity-icon.chat_stopped{background:#7f1d1d;color:var(--danger)}
+.activity-icon.session_indexed{background:var(--border);color:var(--muted)}
+.activity-icon.cleanup{background:var(--border);color:var(--muted)}
+.activity-icon.alert{background:#7f1d1d;color:var(--warning)}
+.activity-item .activity-body{flex:1;min-width:0}
+.activity-item .activity-msg{color:var(--text);word-break:break-word}
+.activity-item .activity-time{font-size:10px;color:var(--muted);margin-top:2px}
+
+.panel{padding:20px;max-width:720px;margin:0 auto;width:100%}
+.panel h3{font-size:16px;font-weight:600;margin-bottom:16px}
+.panel-section{margin-bottom:24px}
+.panel-section h4{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px}
+
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:20px}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px}
+.stat-card .stat-label{font-size:11px;color:var(--muted);margin-bottom:4px}
+.stat-card .stat-value{font-size:20px;font-weight:600}
+.stat-card .stat-sub{font-size:11px;color:var(--muted);margin-top:2px}
+
+.bar-chart{display:flex;align-items:flex-end;gap:6px;height:100px;padding:8px 0}
+.bar-chart .bar-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px}
+.bar-chart .bar{width:100%;border-radius:4px 4px 0 0;background:var(--accent-dim);min-height:2px;transition:height .3s ease}
+.bar-chart .bar-label{font-size:9px;color:var(--muted)}
+.bar-chart .bar-value{font-size:9px;color:var(--text)}
+
+.sparkline-row{display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--border)}
+.sparkline-row:last-child{border-bottom:none}
+.sparkline-label{font-size:12px;color:var(--muted);width:120px;flex-shrink:0}
+.sparkline-value{font-size:14px;font-weight:500;width:80px;text-align:right;flex-shrink:0}
+.sparkline-chart{flex:1;height:30px}
+.sparkline-chart svg{width:100%;height:100%}
+
+.traces-table{width:100%;font-size:12px;border-collapse:collapse}
+.traces-table th{text-align:left;padding:8px 10px;color:var(--muted);border-bottom:1px solid var(--border);font-weight:500;font-size:11px;text-transform:uppercase;letter-spacing:.03em}
+.traces-table td{padding:8px 10px;border-bottom:1px solid var(--border)}
+.traces-table tr:hover td{background:var(--bg)}
+.traces-table .trace-success{color:var(--success)}
+.traces-table .trace-error{color:var(--danger)}
+.traces-table .trace-stopped{color:var(--warning)}
+.trace-summary{display:flex;gap:16px;margin-bottom:16px}
+.trace-summary .trace-stat{font-size:12px;color:var(--muted)}
+.trace-summary .trace-stat strong{color:var(--text);font-weight:600}
 
 .overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9}
 .modal{display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;z-index:11;width:min(380px,90vw);max-height:80vh;overflow-y:auto}
@@ -121,6 +193,8 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sy
   .hamburger{display:block}
   .msg{max-width:100%}
   .overlay.visible{display:block}
+  .activity-sidebar{position:fixed;top:0;right:0;bottom:0;z-index:10;transform:translateX(100%)}
+  .activity-sidebar.open{transform:translateX(0);display:flex}
 }
 </style>
 </head>
@@ -133,7 +207,7 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sy
       <div class="actions">
         <button class="icon-btn" id="qrBtn" title="QR Code">&#9641;</button>
         <button class="icon-btn" id="settingsBtn" title="Settings">&#9881;</button>
-        <span>v0.1</span>
+        <span>v0.2</span>
       </div>
     </div>
     <div class="controls">
@@ -169,25 +243,97 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sy
     <div class="tailscale-url" id="tailscaleUrl"></div>
   </div>
   <div class="main">
+    <div class="alert-banner" id="alertBanner">
+      <span id="alertText"></span>
+      <button class="alert-dismiss" id="alertDismiss">&times;</button>
+    </div>
     <div class="topbar">
       <button class="hamburger" id="menuBtn">&#9776;</button>
       <span class="session-name" id="sessionInfo">No active session</span>
       <span class="badge model" id="modelBadge">opus</span>
       <span class="badge mode-badge" id="modeBadge">default</span>
       <span class="badge effort-badge" id="effortBadge">medium</span>
+      <button class="icon-btn" id="activityToggle" title="Activity Feed">&#9656;</button>
     </div>
-    <div class="messages" id="messages">
-      <div class="empty">
-        <h2>TailClaude v0.1</h2>
-        <p>Claude Code on your tailnet with streaming, session sharing, and full controls</p>
-        <p style="font-size:12px">Click "+ New Chat" or resume a terminal session from the sidebar</p>
+    <div class="tab-bar">
+      <button class="tab-btn active" data-tab="chat">Chat</button>
+      <button class="tab-btn" data-tab="usage">Usage</button>
+      <button class="tab-btn" data-tab="metrics">Metrics</button>
+      <button class="tab-btn" data-tab="traces">Traces</button>
+    </div>
+    <div class="tab-content active" id="tab-chat">
+      <div class="reconnect-banner" id="reconnectBanner"></div>
+      <div class="messages" id="messages">
+        <div class="empty">
+          <h2>TailClaude v0.2</h2>
+          <p>Claude Code on your tailnet — now with live activity, usage tracking, metrics &amp; traces</p>
+          <p style="font-size:12px">Click "+ New Chat" or resume a terminal session from the sidebar</p>
+        </div>
+      </div>
+      <div class="input-area">
+        <div class="input-wrap">
+          <textarea id="input" placeholder="Send a message..." rows="1" disabled></textarea>
+          <button id="send" class="btn-send" disabled>Send</button>
+          <button id="stop" class="btn-stop" style="display:none">Stop</button>
+        </div>
       </div>
     </div>
-    <div class="input-area">
-      <div class="input-wrap">
-        <textarea id="input" placeholder="Send a message..." rows="1" disabled></textarea>
-        <button id="send" class="btn-send" disabled>Send</button>
-        <button id="stop" class="btn-stop" style="display:none">Stop</button>
+    <div class="tab-content" id="tab-usage">
+      <div class="panel">
+        <h3>Cost &amp; Usage</h3>
+        <div class="stat-grid" id="usageStats">
+          <div class="stat-card"><div class="stat-label">Today's Cost</div><div class="stat-value" id="todayCost">$0.00</div></div>
+          <div class="stat-card"><div class="stat-label">Today's Requests</div><div class="stat-value" id="todayRequests">0</div></div>
+          <div class="stat-card"><div class="stat-label">Input Tokens</div><div class="stat-value" id="todayInput">0</div></div>
+          <div class="stat-card"><div class="stat-label">Output Tokens</div><div class="stat-value" id="todayOutput">0</div></div>
+        </div>
+        <div class="panel-section">
+          <h4>7-Day Cost Trend</h4>
+          <div class="bar-chart" id="usageChart"></div>
+        </div>
+        <div class="panel-section">
+          <div class="stat-card"><div class="stat-label">Total Accumulated Cost</div><div class="stat-value" id="totalCostAll">$0.00</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="tab-content" id="tab-metrics">
+      <div class="panel">
+        <h3>Metrics Timeline</h3>
+        <p style="font-size:12px;color:var(--muted);margin-bottom:16px">Last 60 minutes, refreshes every 60s</p>
+        <div id="metricsSparklines">
+          <div class="sparkline-row">
+            <span class="sparkline-label">Memory RSS</span>
+            <span class="sparkline-value" id="metricMemory">--</span>
+            <div class="sparkline-chart" id="chartMemory"></div>
+          </div>
+          <div class="sparkline-row">
+            <span class="sparkline-label">CPU</span>
+            <span class="sparkline-value" id="metricCpu">--</span>
+            <div class="sparkline-chart" id="chartCpu"></div>
+          </div>
+          <div class="sparkline-row">
+            <span class="sparkline-label">Event Loop Lag</span>
+            <span class="sparkline-value" id="metricLag">--</span>
+            <div class="sparkline-chart" id="chartLag"></div>
+          </div>
+          <div class="sparkline-row">
+            <span class="sparkline-label">Active Chats</span>
+            <span class="sparkline-value" id="metricChats">--</span>
+            <div class="sparkline-chart" id="chartChats"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="tab-content" id="tab-traces">
+      <div class="panel">
+        <h3>Request Traces</h3>
+        <div class="trace-summary" id="traceSummary"></div>
+        <table class="traces-table">
+          <thead>
+            <tr><th>Time</th><th>Model</th><th>Duration</th><th>Cost</th><th>Tokens In</th><th>Tokens Out</th><th>Status</th></tr>
+          </thead>
+          <tbody id="tracesBody"></tbody>
+        </table>
       </div>
     </div>
     <div class="status-bar">
@@ -196,6 +342,14 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sy
       <span id="sessionCount"></span>
       <span id="costDisplay"></span>
     </div>
+  </div>
+  <div class="activity-sidebar" id="activitySidebar">
+    <div class="activity-header">
+      <h3>Activity Feed</h3>
+      <span class="badge-count" id="activityBadge">0</span>
+      <button class="icon-btn" id="activityClose" title="Close">&times;</button>
+    </div>
+    <div class="activity-list" id="activityList"></div>
   </div>
 </div>
 
@@ -260,6 +414,12 @@ const $sidebar = $('#sidebar')
 const $overlay = $('#overlay')
 const $menuBtn = $('#menuBtn')
 const $tailscaleUrl = $('#tailscaleUrl')
+const $activitySidebar = $('#activitySidebar')
+const $activityList = $('#activityList')
+const $activityBadge = $('#activityBadge')
+const $alertBanner = $('#alertBanner')
+const $alertText = $('#alertText')
+const $reconnectBanner = $('#reconnectBanner')
 
 let currentSession = null
 let sessions = []
@@ -271,6 +431,10 @@ let streamedText = ''
 let streamedTools = []
 let sessionNames = JSON.parse(localStorage.getItem('tc_names') || '{}')
 let connected = false
+let activityOpen = false
+let activityEventSource = null
+let newActivityCount = 0
+let activeTab = 'chat'
 
 function saveNames() {
   localStorage.setItem('tc_names', JSON.stringify(sessionNames))
@@ -326,6 +490,23 @@ function authHeaders() {
   if (API_TOKEN) h['authorization'] = `Bearer ${API_TOKEN}`
   return h
 }
+function tokenQuery() {
+  return API_TOKEN ? `?token=${encodeURIComponent(API_TOKEN)}` : ''
+}
+
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'))
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'))
+    btn.classList.add('active')
+    const tab = btn.dataset.tab
+    document.getElementById('tab-' + tab).classList.add('active')
+    activeTab = tab
+    if (tab === 'usage') loadUsage()
+    if (tab === 'metrics') loadMetrics()
+    if (tab === 'traces') loadTraces()
+  }
+})
 
 function toggleSidebar(show) {
   const open = show ?? !$sidebar.classList.contains('open')
@@ -367,6 +548,266 @@ $('#qrBtn').onclick = () => {
 }
 $('#qrClose').onclick = hideModals
 $('#renameClose').onclick = hideModals
+
+$('#activityToggle').onclick = () => {
+  activityOpen = !activityOpen
+  $activitySidebar.classList.toggle('open', activityOpen)
+  $('#activityToggle').classList.toggle('active', activityOpen)
+  if (activityOpen) {
+    newActivityCount = 0
+    $activityBadge.textContent = '0'
+    $activityBadge.classList.remove('visible')
+  }
+}
+$('#activityClose').onclick = () => {
+  activityOpen = false
+  $activitySidebar.classList.remove('open')
+  $('#activityToggle').classList.remove('active')
+}
+$('#alertDismiss').onclick = () => {
+  $alertBanner.classList.remove('visible')
+}
+
+function connectActivitySSE() {
+  if (activityEventSource) activityEventSource.close()
+  const url = '/activity' + tokenQuery()
+  activityEventSource = new EventSource(url)
+
+  activityEventSource.onmessage = (e) => {
+    try {
+      const event = JSON.parse(e.data)
+      addActivityItem(event)
+
+      if (event.type === 'alert') {
+        $alertText.textContent = event.message
+        $alertBanner.classList.add('visible')
+      }
+    } catch {}
+  }
+
+  activityEventSource.onerror = () => {
+    setTimeout(connectActivitySSE, 5000)
+  }
+}
+
+const ACTIVITY_ICONS = {
+  chat_started: '\u25B6',
+  chat_completed: '\u2713',
+  chat_stopped: '\u25A0',
+  session_indexed: '\u2261',
+  cleanup: '\u2672',
+  alert: '\u26A0'
+}
+
+function addActivityItem(event) {
+  const div = document.createElement('div')
+  div.className = 'activity-item'
+
+  const icon = ACTIVITY_ICONS[event.type] || '\u2022'
+  const timeStr = formatRelative(event.timestamp)
+
+  div.innerHTML = `
+    <div class="activity-icon ${escapeHtml(event.type)}">${icon}</div>
+    <div class="activity-body">
+      <div class="activity-msg">${escapeHtml(event.message)}</div>
+      <div class="activity-time">${escapeHtml(timeStr)}</div>
+    </div>`
+
+  $activityList.appendChild(div)
+
+  if ($activityList.scrollHeight - $activityList.scrollTop < $activityList.clientHeight + 60) {
+    $activityList.scrollTop = $activityList.scrollHeight
+  }
+
+  if (!activityOpen) {
+    newActivityCount++
+    $activityBadge.textContent = String(newActivityCount)
+    $activityBadge.classList.add('visible')
+  }
+}
+
+function formatRelative(iso) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  const now = new Date()
+  const diffMs = now - d
+  const diffSec = Math.floor(diffMs / 1000)
+  if (diffSec < 5) return 'just now'
+  if (diffSec < 60) return `${diffSec}s ago`
+  const diffMin = Math.floor(diffSec / 60)
+  if (diffMin < 60) return `${diffMin}m ago`
+  return `${Math.floor(diffMin / 60)}h ago`
+}
+
+async function loadUsage() {
+  try {
+    const res = await fetch('/usage', { headers: authHeaders() })
+    const data = await res.json()
+    const usage = data.usage || []
+
+    const today = new Date().toISOString().slice(0, 10)
+    const todayData = usage.find(u => u.date === today)
+
+    $('#todayCost').textContent = '$' + (todayData?.totalCost || 0).toFixed(4)
+    $('#todayRequests').textContent = String(todayData?.requestCount || 0)
+    $('#todayInput').textContent = (todayData?.totalInputTokens || 0).toLocaleString()
+    $('#todayOutput').textContent = (todayData?.totalOutputTokens || 0).toLocaleString()
+
+    let totalAll = 0
+    usage.forEach(u => totalAll += u.totalCost || 0)
+    $('#totalCostAll').textContent = '$' + totalAll.toFixed(4)
+
+    renderBarChart(usage.slice(0, 7).reverse())
+  } catch {}
+}
+
+function renderBarChart(days) {
+  const chart = $('#usageChart')
+  if (!days.length) {
+    chart.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:20px;text-align:center">No usage data yet</div>'
+    return
+  }
+  const maxCost = Math.max(...days.map(d => d.totalCost || 0), 0.001)
+  chart.innerHTML = days.map(d => {
+    const pct = ((d.totalCost || 0) / maxCost * 100).toFixed(0)
+    const label = d.date.slice(5)
+    const val = '$' + (d.totalCost || 0).toFixed(3)
+    return `<div class="bar-col">
+      <div class="bar-value">${val}</div>
+      <div class="bar" style="height:${pct}%"></div>
+      <div class="bar-label">${label}</div>
+    </div>`
+  }).join('')
+}
+
+async function loadMetrics() {
+  try {
+    const res = await fetch('/metrics', { headers: authHeaders() })
+    const data = await res.json()
+    const timeline = data.timeline || []
+    const alerts = data.alerts || []
+
+    if (timeline.length > 0) {
+      const last = timeline[timeline.length - 1]
+      $('#metricMemory').textContent = (last.memory_rss / (1024 * 1024)).toFixed(1) + ' MB'
+      $('#metricCpu').textContent = last.cpu_percent.toFixed(1) + '%'
+      $('#metricLag').textContent = last.event_loop_lag_ms.toFixed(1) + ' ms'
+      $('#metricChats').textContent = String(last.active_chats)
+    }
+
+    renderSparkline('chartMemory', timeline.map(t => t.memory_rss / (1024 * 1024)))
+    renderSparkline('chartCpu', timeline.map(t => t.cpu_percent))
+    renderSparkline('chartLag', timeline.map(t => t.event_loop_lag_ms))
+    renderSparkline('chartChats', timeline.map(t => t.active_chats))
+
+    if (alerts.length > 0) {
+      const msg = alerts.map(a => a.type?.replace('_', ' ')).join(', ')
+      $alertText.textContent = msg
+      $alertBanner.classList.add('visible')
+    }
+  } catch {}
+}
+
+function renderSparkline(containerId, values) {
+  const container = document.getElementById(containerId)
+  if (!values.length) {
+    container.innerHTML = '<svg viewBox="0 0 200 30"></svg>'
+    return
+  }
+  const max = Math.max(...values, 1)
+  const w = 200
+  const h = 30
+  const step = w / Math.max(values.length - 1, 1)
+  const points = values.map((v, i) => {
+    const x = (i * step).toFixed(1)
+    const y = (h - (v / max) * (h - 2) - 1).toFixed(1)
+    return `${x},${y}`
+  }).join(' ')
+
+  container.innerHTML = `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+    <polyline points="${points}" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
+  </svg>`
+}
+
+async function loadTraces() {
+  try {
+    const res = await fetch('/traces', { headers: authHeaders() })
+    const data = await res.json()
+    const traces = data.traces || []
+
+    const today = new Date().toISOString().slice(0, 10)
+    const todayTraces = traces.filter(t => t.timestamp?.startsWith(today))
+    const avgDuration = todayTraces.length ? todayTraces.reduce((s, t) => s + (t.duration || 0), 0) / todayTraces.length : 0
+    const avgCost = todayTraces.length ? todayTraces.reduce((s, t) => s + (t.cost || 0), 0) / todayTraces.length : 0
+
+    $('#traceSummary').innerHTML = `
+      <div class="trace-stat">Avg Duration: <strong>${(avgDuration / 1000).toFixed(1)}s</strong></div>
+      <div class="trace-stat">Avg Cost: <strong>$${avgCost.toFixed(4)}</strong></div>
+      <div class="trace-stat">Today: <strong>${todayTraces.length} requests</strong></div>`
+
+    const tbody = $('#tracesBody')
+    tbody.innerHTML = traces.slice(0, 50).map(t => {
+      const time = t.timestamp ? new Date(t.timestamp).toLocaleTimeString() : '--'
+      const dur = t.duration ? (t.duration / 1000).toFixed(1) + 's' : '--'
+      const cost = t.cost ? '$' + t.cost.toFixed(4) : '--'
+      const tokIn = t.inputTokens ? t.inputTokens.toLocaleString() : '--'
+      const tokOut = t.outputTokens ? t.outputTokens.toLocaleString() : '--'
+      let statusClass = 'trace-stopped'
+      let statusText = 'stopped'
+      if (t.reason) {
+        statusClass = 'trace-stopped'
+        statusText = t.reason
+      } else if (t.exitCode === 0) {
+        statusClass = 'trace-success'
+        statusText = 'success'
+      } else if (t.exitCode != null) {
+        statusClass = 'trace-error'
+        statusText = 'exit ' + t.exitCode
+      }
+      return `<tr>
+        <td>${escapeHtml(time)}</td>
+        <td>${escapeHtml(t.model || '--')}</td>
+        <td>${dur}</td>
+        <td>${cost}</td>
+        <td>${tokIn}</td>
+        <td>${tokOut}</td>
+        <td class="${statusClass}">${escapeHtml(statusText)}</td>
+      </tr>`
+    }).join('')
+  } catch {}
+}
+
+async function checkActiveChats() {
+  try {
+    const res = await fetch('/chat/active', { headers: authHeaders() })
+    const data = await res.json()
+    if (data.active && data.active.length > 0) {
+      const active = data.active[0]
+      const replayRes = await fetch(`/chat/replay/${active.requestId}`, { headers: authHeaders() })
+      const replayData = await replayRes.json()
+
+      if (replayData.events && replayData.events.length > 0) {
+        $reconnectBanner.textContent = `Reconnected \u2014 replaying ${replayData.events.length} events`
+        $reconnectBanner.classList.add('visible')
+
+        for (const evt of replayData.events) {
+          if (evt.data?.type === 'assistant' && evt.data?.message?.content) {
+            const content = evt.data.message.content
+            if (Array.isArray(content)) {
+              for (const block of content) {
+                if (block.type === 'text' && block.text) {
+                  addMessage('assistant', block.text)
+                }
+              }
+            }
+          }
+        }
+
+        setTimeout(() => $reconnectBanner.classList.remove('visible'), 5000)
+      }
+    }
+  } catch {}
+}
 
 async function loadSettings() {
   try {
@@ -510,7 +951,7 @@ function renderSessions() {
     <div class="session-item ${s.id === currentSession?.id ? 'active' : ''}" data-id="${s.id}">
       <div class="session-info">
         <span class="name">${escapeHtml(displayName(s))}</span>
-        <span class="session-meta">${escapeHtml(date)}${msgCount ? ' · ' + msgCount : ''}</span>
+        <span class="session-meta">${escapeHtml(date)}${msgCount ? ' \u00B7 ' + msgCount : ''}</span>
       </div>
       <div class="badges">
         <span class="source-badge ${escapeHtml(source)}">${escapeHtml(source)}</span>
@@ -568,6 +1009,12 @@ async function setActiveSession() {
   $messages.innerHTML = ''
   renderSessions()
   localStorage.setItem('tc_last_session', currentSession.id)
+
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'))
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'))
+  document.querySelector('.tab-btn[data-tab="chat"]').classList.add('active')
+  document.getElementById('tab-chat').classList.add('active')
+  activeTab = 'chat'
 
   if (currentSession.id) {
     $messages.innerHTML = '<div class="msg assistant"><div class="loading"><span></span><span></span><span></span></div></div>'
@@ -799,12 +1246,10 @@ async function streamMessage(message, isInit) {
             const usage = event.usage || {}
             const inp = (usage.input_tokens || 0) + (usage.cache_read_input_tokens || 0) + (usage.cache_creation_input_tokens || 0)
             const out = usage.output_tokens || 0
-            $costDisplay.textContent = `$${totalCost.toFixed(4)} · ${inp.toLocaleString()} in / ${out.toLocaleString()} out`
+            $costDisplay.textContent = `$${totalCost.toFixed(4)} \u00B7 ${inp.toLocaleString()} in / ${out.toLocaleString()} out`
           }
 
-        } catch {
-          // skip unparseable event
-        }
+        } catch {}
       }
     }
 
@@ -974,8 +1419,13 @@ $newChat.addEventListener('click', createSession)
 
 checkHealth()
 loadSessions()
+connectActivitySSE()
+checkActiveChats()
 setInterval(checkHealth, 15000)
 setInterval(loadSessions, 60000)
+setInterval(() => {
+  if (activeTab === 'metrics') loadMetrics()
+}, 60000)
 </script>
 </body>
 </html>

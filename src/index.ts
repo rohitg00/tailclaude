@@ -9,6 +9,14 @@ import { startProxy } from "./proxy.js";
 import { registerChatStream } from "./streams.js";
 import { indexSessions } from "./sessions.js";
 import { state } from "./state.js";
+import { pushActivity } from "./activity.js";
+import { incrementUsage, cleanupOldUsage } from "./usage.js";
+import { snapshotMetrics } from "./metrics-timeline.js";
+import {
+  writeCompletedTrace,
+  writeStoppedTrace,
+  cleanupOldTraces,
+} from "./traces.js";
 
 const logger = new Logger(undefined, "tailclaude");
 
@@ -35,6 +43,7 @@ useEvent(
     inputTokens: number;
     outputTokens: number;
     duration: number;
+    exitCode?: number | null;
   }) => {
     if (!data.sessionId) return;
     try {
@@ -42,15 +51,126 @@ useEvent(
         scope: "session_index",
         key: data.sessionId,
         ops: [
-          { type: "set", path: "lastModified", value: new Date().toISOString() },
+          {
+            type: "set",
+            path: "lastModified",
+            value: new Date().toISOString(),
+          },
           { type: "increment", path: "messageCount", by: 2 },
         ],
       });
-    } catch {
-      // session might not be indexed yet
-    }
+    } catch {}
   },
   "Update session index on chat completion",
+);
+
+useEvent(
+  "chat::started",
+  async (data: {
+    requestId: string;
+    sessionId: string | null;
+    model: string;
+    mode: string;
+    effort: string;
+  }) => {
+    pushActivity("chat_started", `Chat started (${data.model})`, {
+      requestId: data.requestId,
+      sessionId: data.sessionId,
+      model: data.model,
+    });
+  },
+  "Activity feed: chat started",
+);
+
+useEvent(
+  "chat::completed",
+  async (data: {
+    requestId: string;
+    sessionId: string | null;
+    model: string;
+    cost: number;
+    inputTokens: number;
+    outputTokens: number;
+    duration: number;
+    exitCode?: number | null;
+  }) => {
+    pushActivity(
+      "chat_completed",
+      `Chat completed — $${data.cost.toFixed(4)} in ${(data.duration / 1000).toFixed(1)}s`,
+      {
+        requestId: data.requestId,
+        cost: data.cost,
+        duration: data.duration,
+        model: data.model,
+      },
+    );
+  },
+  "Activity feed: chat completed",
+);
+
+useEvent(
+  "chat::completed",
+  async (data: {
+    requestId: string;
+    sessionId: string | null;
+    model: string;
+    cost: number;
+    inputTokens: number;
+    outputTokens: number;
+    duration: number;
+  }) => {
+    await incrementUsage(data.cost, data.inputTokens, data.outputTokens);
+  },
+  "Usage: increment daily stats on chat completion",
+);
+
+useEvent(
+  "chat::completed",
+  async (data: {
+    requestId: string;
+    sessionId: string | null;
+    model: string;
+    cost: number;
+    inputTokens: number;
+    outputTokens: number;
+    duration: number;
+    exitCode?: number | null;
+  }) => {
+    await writeCompletedTrace(data);
+  },
+  "Traces: write completed trace",
+);
+
+useEvent(
+  "chat::stopped",
+  async (data: { requestId: string; reason: string }) => {
+    pushActivity("chat_stopped", `Chat stopped (${data.reason})`, {
+      requestId: data.requestId,
+      reason: data.reason,
+    });
+    await writeStoppedTrace(data);
+  },
+  "Activity feed + traces: chat stopped",
+);
+
+useEvent(
+  "session::indexed",
+  async (data: { total: number; added: number }) => {
+    pushActivity(
+      "session_indexed",
+      `Sessions indexed: ${data.total} found, ${data.added} updated`,
+      { total: data.total, added: data.added },
+    );
+  },
+  "Activity feed: session indexed",
+);
+
+useEvent(
+  "cleanup::completed",
+  async (data: Record<string, unknown>) => {
+    pushActivity("cleanup", "Cleanup completed", data);
+  },
+  "Activity feed: cleanup completed",
 );
 
 useCron(
@@ -68,10 +188,32 @@ useCron(
   "Re-index terminal sessions every 5 minutes",
 );
 
+useCron(
+  "0 */1 * * * *",
+  async () => {
+    await snapshotMetrics();
+  },
+  "Snapshot metrics and check overload thresholds every minute",
+);
+
+useCron(
+  "0 0 */6 * * *",
+  async () => {
+    const [usageRemoved, tracesRemoved] = await Promise.all([
+      cleanupOldUsage(),
+      cleanupOldTraces(),
+    ]);
+    logger.info("Data cleanup", { usageRemoved, tracesRemoved });
+  },
+  "Cleanup old usage and trace data every 6 hours",
+);
+
 indexSessions().catch((err) => {
   logger.warn("Initial session indexing failed", { error: err?.message });
 });
 
 registerShutdownHandlers();
 
-logger.info("TailClaude v0.1 worker registered — waiting for iii engine connection");
+logger.info(
+  "TailClaude v0.2 worker registered — waiting for iii engine connection",
+);
