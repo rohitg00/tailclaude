@@ -17,6 +17,7 @@ import {
   writeStoppedTrace,
   cleanupOldTraces,
 } from "./traces.js";
+import { backfillSessionCosts } from "./session-costs.js";
 
 const logger = new Logger(undefined, "tailclaude");
 
@@ -184,8 +185,9 @@ useCron(
   async () => {
     logger.info("Re-indexing sessions");
     await indexSessions();
+    await backfillSessionCosts();
   },
-  "Re-index terminal sessions every 5 minutes",
+  "Re-index terminal sessions and backfill costs every 5 minutes",
 );
 
 useCron(
@@ -208,9 +210,20 @@ useCron(
   "Cleanup old usage and trace data every 6 hours",
 );
 
-indexSessions().catch((err) => {
-  logger.warn("Initial session indexing failed", { error: err?.message });
-});
+indexSessions()
+  .then(() => backfillSessionCosts())
+  .then((result) => {
+    if (result.sessions > 0) {
+      pushActivity(
+        "session_indexed",
+        `Backfilled ${result.sessions} sessions — $${result.totalCost.toFixed(2)} total cost`,
+        { sessions: result.sessions, totalCost: result.totalCost },
+      );
+    }
+  })
+  .catch((err) => {
+    logger.warn("Session indexing/backfill failed", { error: err?.message });
+  });
 
 registerShutdownHandlers();
 

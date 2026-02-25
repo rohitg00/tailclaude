@@ -4,7 +4,7 @@ import { state } from "./state.js";
 const logger = new Logger(undefined, "tailclaude-traces");
 
 const SCOPE = "traces";
-const MAX_AGE_MS = 24 * 60 * 60 * 1000;
+const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
 export interface TraceRecord {
   _key: string;
