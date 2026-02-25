@@ -146,12 +146,31 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sy
 .bar-chart .bar-label{font-size:9px;color:var(--muted)}
 .bar-chart .bar-value{font-size:9px;color:var(--text)}
 
-.sparkline-row{display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--border)}
-.sparkline-row:last-child{border-bottom:none}
-.sparkline-label{font-size:12px;color:var(--muted);width:120px;flex-shrink:0}
-.sparkline-value{font-size:14px;font-weight:500;width:80px;text-align:right;flex-shrink:0}
-.sparkline-chart{flex:1;height:30px}
-.sparkline-chart svg{width:100%;height:100%}
+.metrics-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:768px){.metrics-grid{grid-template-columns:1fr}}
+.metric-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;position:relative;overflow:hidden;transition:border-color .2s}
+.metric-card:hover{border-color:color-mix(in srgb,var(--metric-color) 40%,transparent)}
+.metric-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px}
+.metric-info{display:flex;flex-direction:column;gap:2px}
+.metric-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;font-weight:500}
+.metric-value{font-size:28px;font-weight:700;letter-spacing:-.02em;color:var(--metric-color);transition:color .3s}
+.metric-unit{font-size:13px;font-weight:400;color:var(--muted);margin-left:2px}
+.metric-stats{display:flex;gap:12px;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em}
+.metric-stat{display:flex;flex-direction:column;align-items:flex-end;gap:1px}
+.metric-stat-val{font-size:12px;font-weight:600;color:var(--text)}
+.metric-chart{height:80px;position:relative;margin-top:4px}
+.metric-chart svg{width:100%;height:100%;overflow:visible}
+.metric-chart .area{transition:d .4s ease}
+.metric-chart .line{transition:d .4s ease}
+.metric-chart .grid-line{stroke:var(--border);stroke-width:.5;stroke-dasharray:3,3}
+.metric-chart .dot{transition:all .3s ease}
+.metric-pulse{position:absolute;top:16px;right:16px;width:8px;height:8px;border-radius:50%;background:var(--metric-color)}
+.metric-pulse::after{content:'';position:absolute;inset:-3px;border-radius:50%;border:1.5px solid var(--metric-color);animation:pulse 2s ease-out infinite;opacity:0}
+@keyframes pulse{0%{transform:scale(1);opacity:.6}100%{transform:scale(2.5);opacity:0}}
+.metrics-refresh{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px;margin-top:12px}
+.metrics-refresh .refresh-dot{width:6px;height:6px;border-radius:50%;background:var(--success);animation:blink 2s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.metric-time-axis{display:flex;justify-content:space-between;font-size:9px;color:var(--muted);margin-top:2px;padding:0 2px;opacity:.6}
 
 .traces-table{width:100%;font-size:12px;border-collapse:collapse}
 .traces-table th{text-align:left;padding:8px 10px;color:var(--muted);border-bottom:1px solid var(--border);font-weight:500;font-size:11px;text-transform:uppercase;letter-spacing:.03em}
@@ -298,29 +317,76 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sy
     </div>
     <div class="tab-content" id="tab-metrics">
       <div class="panel">
-        <h3>Metrics Timeline</h3>
-        <p style="font-size:12px;color:var(--muted);margin-bottom:16px">Last 60 minutes, refreshes every 60s</p>
-        <div id="metricsSparklines">
-          <div class="sparkline-row">
-            <span class="sparkline-label">Memory RSS</span>
-            <span class="sparkline-value" id="metricMemory">--</span>
-            <div class="sparkline-chart" id="chartMemory"></div>
+        <h3>System Metrics</h3>
+        <div class="metrics-grid">
+          <div class="metric-card" style="--metric-color:#c084fc" id="cardMemory">
+            <div class="metric-pulse"></div>
+            <div class="metric-header">
+              <div class="metric-info">
+                <span class="metric-label">Memory RSS</span>
+                <span class="metric-value" id="metricMemory">--<span class="metric-unit">MB</span></span>
+              </div>
+              <div class="metric-stats">
+                <div class="metric-stat"><span>Min</span><span class="metric-stat-val" id="memMin">--</span></div>
+                <div class="metric-stat"><span>Max</span><span class="metric-stat-val" id="memMax">--</span></div>
+                <div class="metric-stat"><span>Avg</span><span class="metric-stat-val" id="memAvg">--</span></div>
+              </div>
+            </div>
+            <div class="metric-chart" id="chartMemory"></div>
+            <div class="metric-time-axis" id="timeMemory"></div>
           </div>
-          <div class="sparkline-row">
-            <span class="sparkline-label">CPU</span>
-            <span class="sparkline-value" id="metricCpu">--</span>
-            <div class="sparkline-chart" id="chartCpu"></div>
+          <div class="metric-card" style="--metric-color:#60a5fa" id="cardCpu">
+            <div class="metric-pulse"></div>
+            <div class="metric-header">
+              <div class="metric-info">
+                <span class="metric-label">CPU Usage</span>
+                <span class="metric-value" id="metricCpu">--<span class="metric-unit">%</span></span>
+              </div>
+              <div class="metric-stats">
+                <div class="metric-stat"><span>Min</span><span class="metric-stat-val" id="cpuMin">--</span></div>
+                <div class="metric-stat"><span>Max</span><span class="metric-stat-val" id="cpuMax">--</span></div>
+                <div class="metric-stat"><span>Avg</span><span class="metric-stat-val" id="cpuAvg">--</span></div>
+              </div>
+            </div>
+            <div class="metric-chart" id="chartCpu"></div>
+            <div class="metric-time-axis" id="timeCpu"></div>
           </div>
-          <div class="sparkline-row">
-            <span class="sparkline-label">Event Loop Lag</span>
-            <span class="sparkline-value" id="metricLag">--</span>
-            <div class="sparkline-chart" id="chartLag"></div>
+          <div class="metric-card" style="--metric-color:#fb923c" id="cardLag">
+            <div class="metric-pulse"></div>
+            <div class="metric-header">
+              <div class="metric-info">
+                <span class="metric-label">Event Loop Lag</span>
+                <span class="metric-value" id="metricLag">--<span class="metric-unit">ms</span></span>
+              </div>
+              <div class="metric-stats">
+                <div class="metric-stat"><span>Min</span><span class="metric-stat-val" id="lagMin">--</span></div>
+                <div class="metric-stat"><span>Max</span><span class="metric-stat-val" id="lagMax">--</span></div>
+                <div class="metric-stat"><span>Avg</span><span class="metric-stat-val" id="lagAvg">--</span></div>
+              </div>
+            </div>
+            <div class="metric-chart" id="chartLag"></div>
+            <div class="metric-time-axis" id="timeLag"></div>
           </div>
-          <div class="sparkline-row">
-            <span class="sparkline-label">Active Chats</span>
-            <span class="sparkline-value" id="metricChats">--</span>
-            <div class="sparkline-chart" id="chartChats"></div>
+          <div class="metric-card" style="--metric-color:#4ade80" id="cardChats">
+            <div class="metric-pulse"></div>
+            <div class="metric-header">
+              <div class="metric-info">
+                <span class="metric-label">Active Chats</span>
+                <span class="metric-value" id="metricChats">--</span>
+              </div>
+              <div class="metric-stats">
+                <div class="metric-stat"><span>Min</span><span class="metric-stat-val" id="chatsMin">--</span></div>
+                <div class="metric-stat"><span>Max</span><span class="metric-stat-val" id="chatsMax">--</span></div>
+                <div class="metric-stat"><span>Avg</span><span class="metric-stat-val" id="chatsAvg">--</span></div>
+              </div>
+            </div>
+            <div class="metric-chart" id="chartChats"></div>
+            <div class="metric-time-axis" id="timeChats"></div>
           </div>
+        </div>
+        <div class="metrics-refresh">
+          <span class="refresh-dot"></span>
+          <span>Live — auto-refreshes every 30s</span>
         </div>
       </div>
     </div>
@@ -680,25 +746,38 @@ function renderBarChart(days) {
   }).join('')
 }
 
+let metricsChartUid = 0
+
 async function loadMetrics() {
   try {
     const res = await fetch('/metrics', { headers: authHeaders() })
     const data = await res.json()
     const timeline = data.timeline || []
     const alerts = data.alerts || []
+    const timestamps = timeline.map(t => t.ts)
+
+    const memVals = timeline.map(t => t.memory_rss / (1024 * 1024))
+    const cpuVals = timeline.map(t => t.cpu_percent)
+    const lagVals = timeline.map(t => t.event_loop_lag_ms)
+    const chatVals = timeline.map(t => t.active_chats)
 
     if (timeline.length > 0) {
       const last = timeline[timeline.length - 1]
-      $('#metricMemory').textContent = (last.memory_rss / (1024 * 1024)).toFixed(1) + ' MB'
-      $('#metricCpu').textContent = last.cpu_percent.toFixed(1) + '%'
-      $('#metricLag').textContent = last.event_loop_lag_ms.toFixed(1) + ' ms'
-      $('#metricChats').textContent = String(last.active_chats)
+      setMetricValue('metricMemory', (last.memory_rss / (1024*1024)).toFixed(1), 'MB')
+      setMetricValue('metricCpu', last.cpu_percent.toFixed(1), '%')
+      setMetricValue('metricLag', last.event_loop_lag_ms.toFixed(1), 'ms')
+      setMetricValue('metricChats', String(last.active_chats), '')
     }
 
-    renderSparkline('chartMemory', timeline.map(t => t.memory_rss / (1024 * 1024)))
-    renderSparkline('chartCpu', timeline.map(t => t.cpu_percent))
-    renderSparkline('chartLag', timeline.map(t => t.event_loop_lag_ms))
-    renderSparkline('chartChats', timeline.map(t => t.active_chats))
+    renderAreaChart('chartMemory', memVals, '#c084fc', 'mem', timestamps, 'timeMemory')
+    renderAreaChart('chartCpu', cpuVals, '#60a5fa', 'cpu', timestamps, 'timeCpu')
+    renderAreaChart('chartLag', lagVals, '#fb923c', 'lag', timestamps, 'timeLag')
+    renderAreaChart('chartChats', chatVals, '#4ade80', 'chats', timestamps, 'timeChats')
+
+    setMetricStats(memVals, 'mem', 1)
+    setMetricStats(cpuVals, 'cpu', 1)
+    setMetricStats(lagVals, 'lag', 1)
+    setMetricStats(chatVals, 'chats', 0)
 
     if (alerts.length > 0) {
       const msg = alerts.map(a => a.type?.replace('_', ' ')).join(', ')
@@ -708,25 +787,82 @@ async function loadMetrics() {
   } catch {}
 }
 
-function renderSparkline(containerId, values) {
+function setMetricValue(id, val, unit) {
+  const el = document.getElementById(id)
+  if (!el) return
+  el.innerHTML = val + (unit ? `<span class="metric-unit">${unit}</span>` : '')
+}
+
+function setMetricStats(values, prefix, decimals) {
+  if (!values.length) return
+  const min = Math.min(...values)
+  const max = Math.max(...values)
+  const avg = values.reduce((a, b) => a + b, 0) / values.length
+  const fmt = v => decimals > 0 ? v.toFixed(decimals) : String(Math.round(v))
+  const $min = document.getElementById(prefix + 'Min')
+  const $max = document.getElementById(prefix + 'Max')
+  const $avg = document.getElementById(prefix + 'Avg')
+  if ($min) $min.textContent = fmt(min)
+  if ($max) $max.textContent = fmt(max)
+  if ($avg) $avg.textContent = fmt(avg)
+}
+
+function renderAreaChart(containerId, values, color, uid, timestamps, timeAxisId) {
   const container = document.getElementById(containerId)
+  if (!container) return
+  const gradId = 'grad_' + uid + '_' + (++metricsChartUid)
+
   if (!values.length) {
-    container.innerHTML = '<svg viewBox="0 0 200 30"></svg>'
+    container.innerHTML = `<svg viewBox="0 0 300 80" preserveAspectRatio="none">
+      <text x="150" y="45" text-anchor="middle" fill="var(--muted)" font-size="11">Waiting for data...</text>
+    </svg>`
     return
   }
-  const max = Math.max(...values, 1)
-  const w = 200
-  const h = 30
+
+  const w = 300, h = 80, pad = 1
+  const max = Math.max(...values, 1) * 1.1
   const step = w / Math.max(values.length - 1, 1)
+
   const points = values.map((v, i) => {
-    const x = (i * step).toFixed(1)
-    const y = (h - (v / max) * (h - 2) - 1).toFixed(1)
-    return `${x},${y}`
-  }).join(' ')
+    const x = (i * step).toFixed(2)
+    const y = (h - pad - (v / max) * (h - pad * 2)).toFixed(2)
+    return { x: parseFloat(x), y: parseFloat(y) }
+  })
+
+  const linePath = points.map((p, i) => (i === 0 ? 'M' : 'L') + p.x + ',' + p.y).join(' ')
+  const areaPath = linePath + ` L${points[points.length-1].x},${h} L${points[0].x},${h} Z`
+
+  const gridLines = [0.25, 0.5, 0.75].map(pct => {
+    const y = (h - pad - pct * (h - pad * 2)).toFixed(1)
+    return `<line x1="0" y1="${y}" x2="${w}" y2="${y}" class="grid-line"/>`
+  }).join('')
+
+  const lastPt = points[points.length - 1]
 
   container.innerHTML = `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
-    <polyline points="${points}" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
+    <defs>
+      <linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="${color}" stop-opacity="0.35"/>
+        <stop offset="100%" stop-color="${color}" stop-opacity="0.02"/>
+      </linearGradient>
+    </defs>
+    ${gridLines}
+    <path d="${areaPath}" fill="url(#${gradId})" class="area"/>
+    <path d="${linePath}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" class="line"/>
+    <circle cx="${lastPt.x}" cy="${lastPt.y}" r="3" fill="${color}" class="dot"/>
+    <circle cx="${lastPt.x}" cy="${lastPt.y}" r="6" fill="${color}" opacity="0.2" class="dot"/>
   </svg>`
+
+  if (timeAxisId && timestamps && timestamps.length > 1) {
+    const timeEl = document.getElementById(timeAxisId)
+    if (timeEl) {
+      const first = new Date(timestamps[0])
+      const last = new Date(timestamps[timestamps.length - 1])
+      const mid = new Date(timestamps[Math.floor(timestamps.length / 2)])
+      const fmt = d => d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      timeEl.innerHTML = `<span>${fmt(first)}</span><span>${fmt(mid)}</span><span>${fmt(last)}</span>`
+    }
+  }
 }
 
 async function loadTraces() {
@@ -1425,7 +1561,7 @@ setInterval(checkHealth, 15000)
 setInterval(loadSessions, 60000)
 setInterval(() => {
   if (activeTab === 'metrics') loadMetrics()
-}, 60000)
+}, 30000)
 </script>
 </body>
 </html>
