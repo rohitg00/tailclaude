@@ -210,7 +210,8 @@ html,body{height:100%;font-family:'Lora',Georgia,serif;background:var(--bg);colo
 .settings-section h4{font-size:12px;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em}
 .settings-section textarea{min-height:80px;resize:vertical}
 .mcp-list{font-size:12px;color:var(--muted)}
-.mcp-item{padding:6px 8px;background:var(--bg);border-radius:6px;margin-bottom:4px;display:flex;align-items:center;gap:8px}
+.mcp-item{padding:8px 10px;background:var(--bg);border-radius:6px;margin-bottom:4px;display:flex;align-items:flex-start;gap:8px;font-size:12px}
+.mcp-item strong{font-weight:500;color:var(--text)}
 .mcp-item .dot{width:6px;height:6px;border-radius:50%;background:var(--success);flex-shrink:0}
 
 .qr-modal-content{display:flex;flex-direction:column;align-items:center;gap:12px}
@@ -452,6 +453,10 @@ html,body{height:100%;font-family:'Lora',Georgia,serif;background:var(--bg);colo
   <div class="settings-section">
     <h4>MCP Servers</h4>
     <div class="mcp-list" id="mcpList">Loading...</div>
+  </div>
+  <div class="settings-section">
+    <h4>Installed Plugins</h4>
+    <div class="mcp-list" id="pluginList">Loading...</div>
   </div>
 </div>
 
@@ -986,26 +991,28 @@ async function loadSettings() {
     const res = await fetch('/settings', { headers: authHeaders() })
     const data = await res.json()
     const $mcpList = $('#mcpList')
+    const $pluginList = $('#pluginList')
 
-    if (Array.isArray(data.mcpServers) && data.mcpServers.length > 0) {
-      $mcpList.innerHTML = data.mcpServers.map(s => {
-        const name = typeof s === 'string' ? s : (s.name || s.server_name || JSON.stringify(s))
-        return `<div class="mcp-item"><span class="dot"></span>${escapeHtml(name)}</div>`
-      }).join('')
-    } else if (typeof data.mcpServers === 'object' && !Array.isArray(data.mcpServers)) {
-      const names = Object.keys(data.mcpServers)
-      if (names.length > 0) {
-        $mcpList.innerHTML = names.map(n =>
-          `<div class="mcp-item"><span class="dot"></span>${escapeHtml(n)}</div>`
-        ).join('')
-      } else {
-        $mcpList.innerHTML = '<div style="color:var(--muted)">No MCP servers configured</div>'
-      }
+    const servers = Array.isArray(data.mcpServers) ? data.mcpServers : []
+    if (servers.length > 0) {
+      $mcpList.innerHTML = servers.map(s =>
+        `<div class="mcp-item"><span class="dot"></span><div><strong>${escapeHtml(s.name)}</strong><div style="font-size:10px;color:var(--muted);margin-top:1px">${escapeHtml(s.command || '')}${s.source ? ' &middot; ' + escapeHtml(s.source) : ''}</div></div></div>`
+      ).join('')
     } else {
       $mcpList.innerHTML = '<div style="color:var(--muted)">No MCP servers configured</div>'
     }
+
+    const plugs = Array.isArray(data.plugins) ? data.plugins : []
+    if (plugs.length > 0) {
+      $pluginList.innerHTML = plugs.map(p =>
+        `<div class="mcp-item"><span class="dot" style="background:var(--accent)"></span><div><strong>${escapeHtml(p.name)}</strong><div style="font-size:10px;color:var(--muted);margin-top:1px">v${escapeHtml(p.version)} &middot; ${escapeHtml(p.scope)}</div></div></div>`
+      ).join('')
+    } else {
+      $pluginList.innerHTML = '<div style="color:var(--muted)">No plugins installed</div>'
+    }
   } catch {
     $('#mcpList').innerHTML = '<div style="color:var(--danger)">Failed to load settings</div>'
+    $('#pluginList').innerHTML = '<div style="color:var(--danger)">Failed to load settings</div>'
   }
 }
 

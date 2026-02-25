@@ -7,6 +7,7 @@ import {
 } from "node:http";
 import { spawn, execFile, type ChildProcess } from "node:child_process";
 import { readFileSync, readdirSync, statSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -739,35 +740,99 @@ async function handleQr(
   }
 }
 
+async function readJsonFile(
+  path: string,
+): Promise<Record<string, unknown> | null> {
+  try {
+    return JSON.parse(await readFile(path, "utf-8"));
+  } catch {
+    return null;
+  }
+}
+
+function extractMcpServers(
+  json: Record<string, unknown>,
+  source: string,
+  target: Map<string, { name: string; source: string; command: string }>,
+): void {
+  if (
+    !json?.mcpServers ||
+    typeof json.mcpServers !== "object" ||
+    Array.isArray(json.mcpServers)
+  )
+    return;
+  for (const [name, config] of Object.entries(
+    json.mcpServers as Record<string, unknown>,
+  )) {
+    if (!config || typeof config !== "object" || Array.isArray(config))
+      continue;
+    const cfg = config as Record<string, unknown>;
+    const cmd = cfg.command || cfg.url || "";
+    target.set(name, {
+      name,
+      source,
+      command: String(cmd).slice(0, 60),
+    });
+  }
+}
+
 async function handleSettings(
   _req: IncomingMessage,
   res: ServerResponse,
 ): Promise<void> {
-  let mcpServers: unknown = [];
+  const home = homedir();
+  const mcpServersMap = new Map<
+    string,
+    { name: string; source: string; command: string }
+  >();
+  const plugins: Array<{
+    name: string;
+    version: string;
+    scope: string;
+  }> = [];
 
-  try {
-    const result = await new Promise<string>((resolve, reject) => {
-      execFile(
-        CLAUDE_PATH,
-        ["mcp", "list", "--json"],
-        { timeout: 10_000, env: cleanEnv() },
-        (err, stdout) => {
-          if (err) {
-            reject(err);
-            return;
-          }
-          resolve(stdout);
-        },
-      );
-    });
-    mcpServers = JSON.parse(result);
-  } catch {}
+  const claudeJson = await readJsonFile(join(home, ".claude.json"));
+  if (claudeJson)
+    extractMcpServers(claudeJson, "~/.claude.json", mcpServersMap);
+
+  const settingsJson = await readJsonFile(
+    join(home, ".claude", "settings.json"),
+  );
+  if (settingsJson)
+    extractMcpServers(settingsJson, "~/.claude/settings.json", mcpServersMap);
+
+  const pluginsJson = await readJsonFile(
+    join(home, ".claude", "plugins", "installed_plugins.json"),
+  );
+  if (
+    pluginsJson?.plugins &&
+    typeof pluginsJson.plugins === "object" &&
+    !Array.isArray(pluginsJson.plugins)
+  ) {
+    for (const [name, entries] of Object.entries(
+      pluginsJson.plugins as Record<string, unknown>,
+    )) {
+      const arr = Array.isArray(entries) ? entries : [entries];
+      for (const entry of arr) {
+        if (!entry || typeof entry !== "object" || Array.isArray(entry))
+          continue;
+        const e = entry as Record<string, unknown>;
+        plugins.push({
+          name,
+          version: String(e.version || "unknown"),
+          scope: String(e.scope || "user"),
+        });
+      }
+    }
+  }
 
   res.writeHead(200, {
     ...corsHeaders(),
     "content-type": "application/json",
   });
-  res.end(JSON.stringify({ mcpServers }));
+  res.end(
+    JSON.stringify({ mcpServers: Array.from(mcpServersMap.values()), plugins }),
+  );
 }
 
 async function handleHealth(
