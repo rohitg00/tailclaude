@@ -1030,7 +1030,7 @@ export function startProxy(): Promise<void> {
       req.pipe(proxyReq, { end: true });
     });
 
-    server.listen(PROXY_PORT, "127.0.0.1", () => {
+    server.listen(PROXY_PORT, "0.0.0.0", () => {
       logger.info("UI proxy listening", { port: PROXY_PORT });
       resolve();
     });
