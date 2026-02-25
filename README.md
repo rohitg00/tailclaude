@@ -51,22 +51,27 @@ Tailscale handles the secure connection. TailClaude handles everything else.
 |  Node.js Proxy (port 3110)                                      |
 |                                                                 |
 |  GET  /              -> Chat UI (streaming, controls, QR)       |
-|  GET  /health        -> Proxy health + Tailscale URL + sessions |
-|  POST /chat          -> SSE streaming (claude --stream-json)    |
-|  POST /chat/stop     -> Kill active claude process              |
-|  GET  /sessions      -> Discover ALL sessions (~/.claude/)      |
-|  GET  /sessions/:id  -> Load full conversation history          |
-|  GET  /qr            -> QR code SVG (real Tailscale URL)        |
-|  GET  /settings      -> MCP servers list                        |
-|  *                   -> Proxy to iii engine (port 3111)          |
+|  GET  /health        -> Engine state + worker metrics + sessions |
+|  POST /chat          -> OTel-traced SSE streaming chat           |
+|  POST /chat/stop     -> Kill active process + emit lifecycle     |
+|  GET  /sessions      -> State-indexed sessions (sub-ms lookup)   |
+|  GET  /sessions/:id  -> Load full conversation history           |
+|  GET  /qr            -> QR code SVG (real Tailscale URL)         |
+|  GET  /settings      -> MCP servers list                         |
+|  *                   -> Proxy to iii engine (port 3111)           |
 +---------------------------------+-------------------------------+
                                   |
                                   v
 +-----------------------------------------------------------------+
 |  iii engine (port 3111)                                         |
 |                                                                 |
-|  Event: engine::started -> auto-publish to Tailscale + QR       |
-|  Cron:  */30 * * * *    -> cleanup stale sessions               |
+|  State    -> session_index, active_chats, config, published_url |
+|  Streams  -> chat event replay buffer (LRU, 100 groups max)    |
+|  PubSub   -> chat::started/completed/stopped, session::indexed  |
+|  Cron     -> */30 cleanup + */5 session re-index                |
+|  OTel     -> distributed tracing on every chat request          |
+|  Logger   -> structured logging with trace correlation          |
+|  Event: engine::started  -> auto-publish to Tailscale + QR      |
 |  Signal: SIGINT/SIGTERM  -> unpublish Tailscale + clean exit    |
 +---------------------------------+-------------------------------+
                                   |
@@ -79,14 +84,15 @@ Tailscale handles the secure connection. TailClaude handles everything else.
 
 ## How It Works
 
-1. **iii engine** runs the state store, event bus, and cron scheduler
-2. **TailClaude worker** connects via WebSocket and registers event handlers
-3. **Node.js proxy** (port 3110) serves the UI and handles all endpoints directly
-4. `POST /chat` spawns `claude -p --output-format stream-json --verbose` and streams tokens via SSE — parses `type: "assistant"` events for text, tools, and live token usage, and `type: "result"` for final cost
-5. `GET /sessions` discovers all sessions from `~/.claude/projects/` with slug names, relative timestamps, and accurate message counts
-6. `GET /sessions/:id` loads full conversation history (user messages, assistant responses, tool use)
-7. On engine start, auto-publishes to your tailnet via `tailscale serve` and prints a terminal QR code
-8. On shutdown (Ctrl+C), unpublishes from Tailscale and exits cleanly
+1. **iii engine** runs the state store, event bus, stream layer, and cron scheduler
+2. **TailClaude worker** connects via WebSocket and registers functions, triggers, streams, and PubSub subscriptions
+3. **Node.js proxy** (port 3110) serves the UI and handles all endpoints with OTel tracing
+4. `POST /chat` spawns `claude -p --output-format stream-json --verbose`, wraps the request in an OTel span (model, cost, tokens, duration), writes events to the iii chat stream for replay, mirrors process metadata to `active_chats` state, and emits lifecycle events (`chat::started`, `chat::completed`, `chat::stopped`)
+5. `GET /sessions` reads from a state-backed index (sub-ms) instead of scanning the filesystem — the index is refreshed every 5 minutes by cron and updated on `chat::completed` via PubSub
+6. `GET /sessions/:id` uses state for O(1) file path lookup, then reads the JSONL history
+7. `GET /health` returns engine connection state, worker metrics (CPU, memory, event loop lag), active chats from state, and session count from the index
+8. On engine start, auto-publishes to your tailnet via `tailscale serve` and prints a terminal QR code
+9. On shutdown (Ctrl+C), unpublishes from Tailscale, unsubscribes engine listeners, and exits cleanly
 
 ## Prerequisites
 
@@ -175,17 +181,20 @@ tailclaude/
 ├── package.json                 # dependencies (iii-sdk, qrcode)
 ├── tsconfig.json
 └── src/
-    ├── iii.ts                   # SDK init (iii-sdk init() with OTel config)
-    ├── hooks.ts                 # useApi, useEvent, useCron helpers
-    ├── state.ts                 # State wrapper (scope/key API via iii.call)
-    ├── proxy.ts                 # HTTP proxy: SSE chat, sessions, history, QR, settings, health
-    ├── index.ts                 # Register health route + event + cron + proxy
+    ├── iii.ts                   # SDK init + connection state helpers
+    ├── hooks.ts                 # useApi, useEvent, useCron, emit helpers
+    ├── state.ts                 # State wrapper (scope/key API via iii.trigger)
+    ├── streams.ts               # Chat event stream (LRU replay buffer)
+    ├── sessions.ts              # State-backed session index with filesystem scan
+    ├── metrics.ts               # Shared WorkerMetricsCollector singleton
+    ├── proxy.ts                 # HTTP proxy with OTel tracing, structured logging
+    ├── index.ts                 # Register functions, streams, PubSub, crons, proxy
     ├── ui.html                  # Chat UI (single file, inline CSS/JS, ~980 lines)
     └── handlers/
-        ├── health.ts            # GET /health via iii (Tailscale + session status)
+        ├── health.ts            # GET /health (engine state + worker metrics)
         ├── setup.ts             # Tailscale auto-publish with terminal QR code
         ├── shutdown.ts          # Graceful shutdown (SIGINT/SIGTERM + unpublish)
-        └── cleanup.ts           # Cron: remove stale sessions
+        └── cleanup.ts           # Multi-scope cleanup (sessions, chats, index, streams)
 ```
 
 ## Configuration
@@ -204,12 +213,13 @@ The `iii-config.yaml` enables these modules:
 
 | Module | Purpose |
 |--------|---------|
-| State (KV/file) | Persist sessions to `./data/state_store.db` |
+| State (KV/file) | Session index, active chats, Tailscale config (`./data/state_store.db`) |
+| Streams | Chat event replay buffer with LRU eviction (100 groups, 30min TTL) |
 | REST API | HTTP server on port 3111 with CORS (180s timeout) |
 | Queue (builtin) | Internal task queue |
-| PubSub (local) | Event bus for `engine::started` |
-| Cron (KV) | Scheduled session cleanup |
-| Otel (memory) | Observability and structured logging |
+| PubSub (local) | Event bus: `chat::started/completed/stopped`, `session::indexed`, `cleanup::completed` |
+| Cron (KV) | Multi-scope cleanup (every 30min) + session re-indexing (every 5min) |
+| OTel (memory) | Distributed tracing on every chat request (model, cost, tokens, duration) |
 | Shell Exec | Auto-run the TypeScript worker (watches `src/**/*.ts`) |
 
 ## Tailscale Integration
@@ -252,10 +262,10 @@ If Tailscale is not installed, it runs in local-only mode at `http://127.0.0.1:3
 | Endpoint | Method | Auth | Description |
 |----------|--------|------|-------------|
 | `/` | GET | No | Serve chat UI |
-| `/health` | GET | Yes | Proxy health, Tailscale URL, session counts |
-| `/chat` | POST | Yes | SSE streaming chat (spawn claude CLI) |
-| `/chat/stop` | POST | Yes | Stop active claude process by request ID |
-| `/sessions` | GET | Yes | List all discovered sessions with metadata |
+| `/health` | GET | Yes | Engine state, worker metrics, active chats, session count |
+| `/chat` | POST | Yes | OTel-traced SSE streaming chat (spawn claude CLI) |
+| `/chat/stop` | POST | Yes | Stop active process + emit lifecycle event |
+| `/sessions` | GET | Yes | State-indexed sessions with metadata (sub-ms) |
 | `/sessions/:id` | GET | Yes | Load full conversation history for a session |
 | `/qr` | GET | Yes | QR code SVG of the Tailscale URL |
 | `/settings` | GET | Yes | MCP servers and Claude Code config |
@@ -273,6 +283,21 @@ If Tailscale is not installed, it runs in local-only mode at `http://127.0.0.1:3
   "systemPrompt": "You are a helpful assistant"
 }
 ```
+
+## iii Integration
+
+TailClaude deeply integrates every iii engine primitive, making it a real-world reference app for the [iii SDK](https://github.com/iii-hq/iii).
+
+| Primitive | How TailClaude Uses It |
+|---|---|
+| **State** | Session index (sub-ms lookups), active chat tracking, Tailscale URL cache |
+| **Streams** | Chat event replay buffer — each SSE event written to an LRU-evicted stream group per request |
+| **PubSub** | `chat::started`, `chat::completed`, `chat::stopped`, `session::indexed`, `cleanup::completed` |
+| **Cron** | Multi-scope cleanup every 30min + session re-indexing every 5min |
+| **OTel Tracing** | Every `POST /chat` wrapped in a span with model, cost, tokens, duration, exit code |
+| **Logger** | Structured logging with trace correlation across proxy, cleanup, shutdown |
+| **Connection Monitor** | Engine WebSocket state exposed in `/health` endpoint |
+| **Worker Metrics** | CPU, memory, event loop lag, uptime in `/health` via `WorkerMetricsCollector` |
 
 ## Background
 
