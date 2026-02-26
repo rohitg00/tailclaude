@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/banner.jpg" alt="TailClaude — Claude Code from any browser" width="100%" />
+  <img src="assets/banner-v2.jpg" alt="TailClaude — Claude Code from any browser" width="100%" />
 </p>
 
 # TailClaude
