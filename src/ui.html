@@ -837,7 +837,7 @@ async function loadUsage() {
       $('#paceBudget').textContent = pace.daysRemaining + ' days remaining'
       const budget = getBudget()
       if (budget) {
-        const pct = Math.min(100, (totalAll / budget) * 100)
+        const pct = Math.min(100, ((pace.monthSpent || 0) / budget) * 100)
         $('#budgetBar').style.display = ''
         const fill = $('#budgetBarFill')
         fill.style.width = pct + '%'
@@ -1913,16 +1913,16 @@ document.addEventListener('keydown', (e) => {
     return
   }
 
-  if (!isInputFocused() && !meta && !e.shiftKey && !e.altKey) {
-    if (e.key === '/') {
-      e.preventDefault()
-      $input.focus()
-      return
-    }
-    if (e.key === '?') {
+  if (!isInputFocused() && !meta && !e.altKey) {
+    if (e.key === '?' && e.shiftKey) {
       e.preventDefault()
       if (shortcutsOpen) closeShortcuts()
       else openShortcuts()
+      return
+    }
+    if (e.key === '/' && !e.shiftKey) {
+      e.preventDefault()
+      $input.focus()
       return
     }
   }

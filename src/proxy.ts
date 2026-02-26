@@ -937,10 +937,19 @@ async function handleHealth(
 }
 
 async function handleUsage(
-  _req: IncomingMessage,
+  req: IncomingMessage,
   res: ServerResponse,
 ): Promise<void> {
-  const [stats, pace] = await Promise.all([getUsageStats(7), getPaceStats()]);
+  const url = new URL(req.url || "", `http://${req.headers.host}`);
+  const rawBudget = url.searchParams.get("budget");
+  const budgetUsd =
+    rawBudget != null && isFinite(Number(rawBudget)) && Number(rawBudget) > 0
+      ? Number(rawBudget)
+      : undefined;
+  const [stats, pace] = await Promise.all([
+    getUsageStats(7),
+    getPaceStats(budgetUsd),
+  ]);
   res.writeHead(200, {
     ...corsHeaders(),
     "content-type": "application/json",
@@ -1023,17 +1032,15 @@ async function handleApiStatus(
     return;
   }
 
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 3000);
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 3000);
     const response = await fetch(
       "https://status.anthropic.com/api/v2/status.json",
       {
         signal: controller.signal,
       },
     );
-    clearTimeout(timeout);
-
     const json = (await response.json()) as {
       status?: { indicator?: string; description?: string };
       page?: { updated_at?: string };
@@ -1061,6 +1068,8 @@ async function handleApiStatus(
       "content-type": "application/json",
     });
     res.end(JSON.stringify(fallback));
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
