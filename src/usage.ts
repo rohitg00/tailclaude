@@ -68,6 +68,30 @@ export async function getUsageStats(days = 7): Promise<DailyUsage[]> {
   }
 }
 
+export interface PaceStats {
+  dailyAvgCost: number;
+  projectedMonthlyCost: number;
+  daysRemaining: number | null;
+}
+
+export async function getPaceStats(budgetUsd?: number): Promise<PaceStats> {
+  const usage = await getUsageStats(7);
+  const weekCost = usage.reduce((sum, d) => sum + (d.totalCost || 0), 0);
+  const daysWithData = usage.length || 1;
+  const dailyAvgCost = weekCost / daysWithData;
+  const projectedMonthlyCost = dailyAvgCost * 30;
+
+  let daysRemaining: number | null = null;
+  if (budgetUsd && budgetUsd > 0 && dailyAvgCost > 0) {
+    const allUsage = await getUsageStats(30);
+    const monthSpent = allUsage.reduce((sum, d) => sum + (d.totalCost || 0), 0);
+    const remaining = Math.max(0, budgetUsd - monthSpent);
+    daysRemaining = Math.floor(remaining / dailyAvgCost);
+  }
+
+  return { dailyAvgCost, projectedMonthlyCost, daysRemaining };
+}
+
 export async function cleanupOldUsage(): Promise<number> {
   let removed = 0;
   try {

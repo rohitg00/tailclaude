@@ -106,7 +106,60 @@ html,body{height:100%;font-family:'Lora',Georgia,serif;background:var(--bg);colo
 .btn-stop{background:var(--danger);color:#fff}
 .input-wrap button:hover{opacity:.85}
 .input-wrap button:disabled{opacity:.4;cursor:not-allowed}
-.status-bar{padding:6px 20px;font-size:11px;color:var(--muted);border-top:1px solid var(--border);display:flex;gap:16px;justify-content:center;flex-wrap:wrap}
+.status-bar{padding:6px 20px;font-size:11px;color:var(--muted);border-top:1px solid var(--border);display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+.status-bar .status-left{display:flex;gap:8px;align-items:center}
+.status-bar .status-center{flex:1;display:flex;gap:16px;justify-content:center;align-items:center}
+.status-bar .status-right{display:flex;gap:8px;align-items:center}
+.status-bar .cost-flash{transition:color .3s ease}
+.status-bar .cost-flash.pulse{color:var(--accent);text-shadow:0 0 6px rgba(217,119,87,.4)}
+.uptime-badge{background:var(--bg);padding:1px 8px;border-radius:8px;font-size:10px}
+
+.api-status-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-left:6px;vertical-align:middle;cursor:help}
+.api-status-dot.none{background:#788c5d}
+.api-status-dot.minor{background:#d4a843}
+.api-status-dot.major{background:#d97757}
+.api-status-dot.critical{background:#cc3333}
+.api-status-dot.unknown{background:#666}
+.api-banner{display:none;padding:6px 16px;font-size:12px;font-weight:500;text-align:center;border-bottom:1px solid var(--border);animation:slideDown .2s ease;font-family:'Poppins',Arial,sans-serif}
+.api-banner.visible{display:block}
+.api-banner.minor{background:#2a2518;color:#d4a843}
+.api-banner.major{background:#2a1f18;color:#d97757}
+.api-banner.critical{background:#2a1818;color:#cc3333}
+
+.pace-row{display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap}
+.pace-card{flex:1;min-width:120px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px}
+.pace-card .pace-label{font-size:11px;color:var(--muted);margin-bottom:4px}
+.pace-card .pace-value{font-size:18px;font-weight:600;font-family:'Poppins',Arial,sans-serif}
+.budget-bar{height:8px;background:var(--border);border-radius:4px;overflow:hidden;margin-top:8px}
+.budget-bar-fill{height:100%;border-radius:4px;transition:width .5s ease,background .3s ease}
+.budget-bar-fill.green{background:#788c5d}
+.budget-bar-fill.yellow{background:#d4a843}
+.budget-bar-fill.red{background:#d97757}
+
+.session-cost{font-size:10px;color:var(--muted);font-family:'Poppins',Arial,sans-serif;flex-shrink:0}
+.session-cost.high{color:var(--accent)}
+
+.cmd-palette{display:none;position:fixed;top:20%;left:50%;transform:translateX(-50%);width:min(520px,90vw);background:var(--surface);border:1px solid var(--border);border-radius:14px;z-index:20;box-shadow:0 20px 60px rgba(0,0,0,.5);overflow:hidden}
+.cmd-palette.open{display:block}
+.cmd-palette-input{width:100%;background:transparent;border:none;border-bottom:1px solid var(--border);color:var(--text);padding:14px 18px;font-size:15px;outline:none;font-family:inherit}
+.cmd-palette-input::placeholder{color:var(--muted)}
+.cmd-palette-list{max-height:300px;overflow-y:auto;padding:6px}
+.cmd-palette-item{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-radius:8px;cursor:pointer;font-size:13px;color:var(--text);transition:background .1s}
+.cmd-palette-item:hover,.cmd-palette-item.selected{background:var(--bg)}
+.cmd-palette-item .cmd-icon{width:24px;color:var(--muted);text-align:center;margin-right:10px;flex-shrink:0}
+.cmd-palette-item .cmd-label{flex:1}
+.cmd-palette-item .cmd-shortcut{font-size:11px;color:var(--muted);font-family:'SF Mono',Menlo,Consolas,monospace;display:flex;gap:4px}
+.cmd-palette-item .cmd-shortcut kbd{background:var(--border);padding:1px 6px;border-radius:4px;font-size:10px}
+
+.shortcuts-modal{display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--surface);border:1px solid var(--border);border-radius:14px;z-index:20;width:min(480px,90vw);max-height:80vh;overflow-y:auto;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.shortcuts-modal.open{display:block}
+.shortcuts-modal h3{font-size:15px;font-weight:600;margin-bottom:16px;font-family:'Poppins',Arial,sans-serif;display:flex;justify-content:space-between;align-items:center}
+.shortcuts-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+@media(max-width:480px){.shortcuts-grid{grid-template-columns:1fr}}
+.shortcut-row{display:flex;justify-content:space-between;align-items:center;padding:6px 8px;border-radius:6px;font-size:13px}
+.shortcut-row:hover{background:var(--bg)}
+.shortcut-row .shortcut-keys{display:flex;gap:4px;flex-shrink:0}
+.shortcut-row kbd{background:var(--border);color:var(--text);padding:2px 8px;border-radius:4px;font-size:11px;font-family:'SF Mono',Menlo,Consolas,monospace}
 .empty{flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;color:var(--muted);padding:20px}
 .empty h2{font-size:24px;font-weight:600;color:var(--text);font-family:'Poppins',Arial,sans-serif}
 .empty p{font-size:14px;text-align:center}
@@ -236,11 +289,11 @@ html,body{height:100%;font-family:'Lora',Georgia,serif;background:var(--bg);colo
   <div class="overlay" id="overlay"></div>
   <div class="sidebar" id="sidebar">
     <div class="sidebar-header">
-      <h1>TailClaude</h1>
+      <h1>TailClaude<span class="api-status-dot unknown" id="apiStatusDot" title="Checking API status..."></span></h1>
       <div class="actions">
         <button class="icon-btn" id="qrBtn" title="QR Code">&#9641;</button>
-        <button class="icon-btn" id="settingsBtn" title="Settings">&#9881;</button>
-        <span>v0.2</span>
+        <button class="icon-btn" id="settingsBtn" title="Settings (Cmd+Shift+S)">&#9881;</button>
+        <span>v0.3</span>
       </div>
     </div>
     <div class="controls">
@@ -280,6 +333,7 @@ html,body{height:100%;font-family:'Lora',Georgia,serif;background:var(--bg);colo
       <span id="alertText"></span>
       <button class="alert-dismiss" id="alertDismiss">&times;</button>
     </div>
+    <div class="api-banner" id="apiBanner"></div>
     <div class="topbar">
       <button class="hamburger" id="menuBtn">&#9776;</button>
       <span class="session-name" id="sessionInfo">No active session</span>
@@ -298,9 +352,9 @@ html,body{height:100%;font-family:'Lora',Georgia,serif;background:var(--bg);colo
       <div class="reconnect-banner" id="reconnectBanner"></div>
       <div class="messages" id="messages">
         <div class="empty">
-          <h2>TailClaude v0.2</h2>
-          <p>Claude Code on your tailnet — now with live activity, usage tracking, metrics &amp; traces</p>
-          <p style="font-size:12px">Click "+ New Chat" or resume a terminal session from the sidebar</p>
+          <h2>TailClaude v0.3</h2>
+          <p>Claude Code on your tailnet — now with pace tracking, command palette &amp; keyboard shortcuts</p>
+          <p style="font-size:12px">Press <kbd style="background:var(--border);padding:1px 6px;border-radius:4px;font-size:11px;font-family:monospace">/</kbd> to focus input, <kbd style="background:var(--border);padding:1px 6px;border-radius:4px;font-size:11px;font-family:monospace">Cmd+K</kbd> for command palette, <kbd style="background:var(--border);padding:1px 6px;border-radius:4px;font-size:11px;font-family:monospace">?</kbd> for shortcuts</p>
         </div>
       </div>
       <div class="input-area">
@@ -319,6 +373,11 @@ html,body{height:100%;font-family:'Lora',Georgia,serif;background:var(--bg);colo
           <div class="stat-card"><div class="stat-label">Today's Requests</div><div class="stat-value" id="todayRequests">0</div></div>
           <div class="stat-card"><div class="stat-label">Input Tokens</div><div class="stat-value" id="todayInput">0</div></div>
           <div class="stat-card"><div class="stat-label">Output Tokens</div><div class="stat-value" id="todayOutput">0</div></div>
+        </div>
+        <div class="pace-row" id="paceStats">
+          <div class="pace-card"><div class="pace-label">Daily Avg</div><div class="pace-value" id="paceDaily">--</div></div>
+          <div class="pace-card"><div class="pace-label">Projected Monthly</div><div class="pace-value" id="paceMonthly">--</div></div>
+          <div class="pace-card"><div class="pace-label">Budget Remaining</div><div class="pace-value" id="paceBudget">No budget set</div><div class="budget-bar" id="budgetBar" style="display:none"><div class="budget-bar-fill green" id="budgetBarFill"></div></div></div>
         </div>
         <div class="panel-section">
           <h4>7-Day Cost Trend</h4>
@@ -411,10 +470,19 @@ html,body{height:100%;font-family:'Lora',Georgia,serif;background:var(--bg);colo
       </div>
     </div>
     <div class="status-bar">
-      <span id="statusDot">&#9679;</span>
-      <span id="statusText">Connecting...</span>
-      <span id="sessionCount"></span>
-      <span id="costDisplay"></span>
+      <div class="status-left">
+        <span id="statusDot">&#9679;</span>
+        <span id="statusText">Connecting...</span>
+      </div>
+      <div class="status-center">
+        <span class="cost-flash" id="todayCostStatus">$0.00</span>
+        <span id="activeChatsStatus"></span>
+        <span id="sessionCount"></span>
+        <span id="costDisplay"></span>
+      </div>
+      <div class="status-right">
+        <span class="uptime-badge" id="uptimeBadge"></span>
+      </div>
     </div>
   </div>
   <div class="activity-sidebar" id="activitySidebar">
@@ -424,6 +492,29 @@ html,body{height:100%;font-family:'Lora',Georgia,serif;background:var(--bg);colo
       <button class="icon-btn" id="activityClose" title="Close">&times;</button>
     </div>
     <div class="activity-list" id="activityList"></div>
+  </div>
+</div>
+
+<div class="cmd-palette" id="cmdPalette">
+  <input class="cmd-palette-input" id="cmdInput" placeholder="Type a command..." autocomplete="off">
+  <div class="cmd-palette-list" id="cmdList"></div>
+</div>
+
+<div class="shortcuts-modal" id="shortcutsModal">
+  <h3>Keyboard Shortcuts <button class="close-btn" id="shortcutsClose">&times;</button></h3>
+  <div class="shortcuts-grid">
+    <div class="shortcut-row"><span>Focus input</span><div class="shortcut-keys"><kbd>/</kbd></div></div>
+    <div class="shortcut-row"><span>Command palette</span><div class="shortcut-keys"><kbd>Cmd</kbd><kbd>K</kbd></div></div>
+    <div class="shortcut-row"><span>New chat</span><div class="shortcut-keys"><kbd>Cmd</kbd><kbd>N</kbd></div></div>
+    <div class="shortcut-row"><span>Chat tab</span><div class="shortcut-keys"><kbd>Cmd</kbd><kbd>1</kbd></div></div>
+    <div class="shortcut-row"><span>Usage tab</span><div class="shortcut-keys"><kbd>Cmd</kbd><kbd>2</kbd></div></div>
+    <div class="shortcut-row"><span>Metrics tab</span><div class="shortcut-keys"><kbd>Cmd</kbd><kbd>3</kbd></div></div>
+    <div class="shortcut-row"><span>Traces tab</span><div class="shortcut-keys"><kbd>Cmd</kbd><kbd>4</kbd></div></div>
+    <div class="shortcut-row"><span>Toggle sidebar</span><div class="shortcut-keys"><kbd>Cmd</kbd><kbd>B</kbd></div></div>
+    <div class="shortcut-row"><span>Activity feed</span><div class="shortcut-keys"><kbd>Cmd</kbd><kbd>.</kbd></div></div>
+    <div class="shortcut-row"><span>Settings</span><div class="shortcut-keys"><kbd>Cmd</kbd><kbd>Shift</kbd><kbd>S</kbd></div></div>
+    <div class="shortcut-row"><span>Close / Unfocus</span><div class="shortcut-keys"><kbd>Esc</kbd></div></div>
+    <div class="shortcut-row"><span>Show shortcuts</span><div class="shortcut-keys"><kbd>?</kbd></div></div>
   </div>
 </div>
 
@@ -594,6 +685,8 @@ function toggleSidebar(show) {
 
 $menuBtn.onclick = () => toggleSidebar()
 $overlay.onclick = () => {
+  if (cmdPaletteOpen) { closeCmdPalette(); return }
+  if (shortcutsOpen) { closeShortcuts(); return }
   hideModals()
   toggleSidebar(false)
 }
@@ -723,6 +816,7 @@ async function loadUsage() {
     const res = await fetch('/usage', { headers: authHeaders() })
     const data = await res.json()
     const usage = data.usage || []
+    const pace = data.pace || {}
 
     const today = new Date().toISOString().slice(0, 10)
     const todayData = usage.find(u => u.date === today)
@@ -735,6 +829,24 @@ async function loadUsage() {
     let totalAll = 0
     usage.forEach(u => totalAll += u.totalCost || 0)
     $('#totalCostAll').textContent = '$' + totalAll.toFixed(4)
+
+    $('#paceDaily').textContent = '$' + (pace.dailyAvgCost || 0).toFixed(2)
+    $('#paceMonthly').textContent = '$' + (pace.projectedMonthlyCost || 0).toFixed(2)
+
+    if (pace.daysRemaining !== null && pace.daysRemaining !== undefined) {
+      $('#paceBudget').textContent = pace.daysRemaining + ' days remaining'
+      const budget = getBudget()
+      if (budget) {
+        const pct = Math.min(100, (totalAll / budget) * 100)
+        $('#budgetBar').style.display = ''
+        const fill = $('#budgetBarFill')
+        fill.style.width = pct + '%'
+        fill.className = 'budget-bar-fill ' + (pct < 50 ? 'green' : pct < 80 ? 'yellow' : 'red')
+      }
+    } else {
+      $('#paceBudget').textContent = 'No budget set'
+      $('#budgetBar').style.display = 'none'
+    }
 
     renderBarChart(usage.slice(0, 7).reverse())
   } catch {}
@@ -1048,19 +1160,39 @@ function escapeHtml(text) {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
+let lastTodayCost = 0
+
 async function checkHealth() {
   try {
     const res = await fetch('/health', { headers: authHeaders() })
     const data = await res.json()
     connected = true
     $statusDot.style.color = 'var(--success)'
-    $statusText.textContent = 'Connected'
+    $statusText.textContent = data.engine?.state === 'connected' ? 'Connected' : 'Engine: ' + (data.engine?.state || 'unknown')
     $statusText.style.color = 'var(--success)'
 
     if (data.sessions?.total !== undefined) {
       const t = data.sessions.total
       const a = data.sessions.active || 0
-      $sessionCount.textContent = a > 0 ? `${a} active / ${t} total` : `${t} session${t !== 1 ? 's' : ''}`
+      $sessionCount.textContent = a > 0 ? `${a} active / ${t} total` : `${t} sessions`
+    }
+
+    if (data.summary) {
+      const s = data.summary
+      const costEl = $('#todayCostStatus')
+      const newCost = s.todayCost || 0
+      costEl.textContent = '$' + newCost.toFixed(2)
+      if (newCost > lastTodayCost && lastTodayCost > 0) {
+        costEl.classList.add('pulse')
+        setTimeout(() => costEl.classList.remove('pulse'), 1500)
+      }
+      lastTodayCost = newCost
+
+      const activeEl = $('#activeChatsStatus')
+      activeEl.textContent = s.activeChats > 0 ? s.activeChats + ' active' : ''
+
+      const uptimeEl = $('#uptimeBadge')
+      uptimeEl.textContent = s.uptime || ''
     }
 
     if (data.publishedUrl) {
@@ -1131,6 +1263,8 @@ function renderSessions() {
     const source = s.source || 'web'
     const date = formatDate(s.lastUsed)
     const msgCount = s.messageCount ? `${s.messageCount} msg${s.messageCount !== 1 ? 's' : ''}` : ''
+    const costStr = s.cost != null ? '$' + s.cost.toFixed(2) : ''
+    const costClass = s.cost != null && s.cost > 1 ? 'high' : ''
     return `
     <div class="session-item ${s.id === currentSession?.id ? 'active' : ''}" data-id="${s.id}">
       <div class="session-info">
@@ -1138,6 +1272,7 @@ function renderSessions() {
         <span class="session-meta">${escapeHtml(date)}${msgCount ? ' \u00B7 ' + msgCount : ''}</span>
       </div>
       <div class="badges">
+        ${costStr ? `<span class="session-cost ${costClass}">${costStr}</span>` : ''}
         <span class="source-badge ${escapeHtml(source)}">${escapeHtml(source)}</span>
       </div>
     </div>`
@@ -1601,12 +1736,232 @@ $input.addEventListener('keydown', e => {
 $send.addEventListener('click', sendMessage)
 $newChat.addEventListener('click', createSession)
 
+const CMD_ACTIONS = [
+  { id: 'new-chat', label: 'New Chat', icon: '+', shortcut: ['Cmd', 'N'], action: () => createSession() },
+  { id: 'chat-tab', label: 'Switch to Chat', icon: '\u2261', shortcut: ['Cmd', '1'], action: () => switchTab('chat') },
+  { id: 'usage-tab', label: 'Switch to Usage', icon: '$', shortcut: ['Cmd', '2'], action: () => switchTab('usage') },
+  { id: 'metrics-tab', label: 'Switch to Metrics', icon: '\u2193', shortcut: ['Cmd', '3'], action: () => switchTab('metrics') },
+  { id: 'traces-tab', label: 'Switch to Traces', icon: '\u2192', shortcut: ['Cmd', '4'], action: () => switchTab('traces') },
+  { id: 'toggle-activity', label: 'Toggle Activity Feed', icon: '\u25B6', shortcut: ['Cmd', '.'], action: () => $('#activityToggle').click() },
+  { id: 'toggle-sidebar', label: 'Toggle Sidebar', icon: '\u2261', shortcut: ['Cmd', 'B'], action: () => toggleSidebar() },
+  { id: 'settings', label: 'Open Settings', icon: '\u2699', shortcut: ['Cmd', 'Shift', 'S'], action: () => $('#settingsBtn').click() },
+  { id: 'copy-session', label: 'Copy Session ID', icon: '\u2398', shortcut: [], action: () => { if (currentSession?.id) { navigator.clipboard.writeText(currentSession.id); } } },
+  { id: 'qr-code', label: 'Show QR Code', icon: '\u25A3', shortcut: [], action: () => $('#qrBtn').click() },
+  { id: 'shortcuts', label: 'Keyboard Shortcuts', icon: '?', shortcut: ['?'], action: () => openShortcuts() },
+]
+
+let cmdPaletteOpen = false
+let cmdSelectedIndex = 0
+let cmdFiltered = [...CMD_ACTIONS]
+
+function switchTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'))
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'))
+  const btn = document.querySelector(`.tab-btn[data-tab="${tab}"]`)
+  if (btn) btn.classList.add('active')
+  const content = document.getElementById('tab-' + tab)
+  if (content) content.classList.add('active')
+  activeTab = tab
+  if (tab === 'usage') loadUsage()
+  if (tab === 'metrics') loadMetrics()
+  if (tab === 'traces') loadTraces()
+}
+
+function openCmdPalette() {
+  cmdPaletteOpen = true
+  const $pal = $('#cmdPalette')
+  $pal.classList.add('open')
+  const $inp = $('#cmdInput')
+  $inp.value = ''
+  cmdFiltered = [...CMD_ACTIONS]
+  cmdSelectedIndex = 0
+  renderCmdList()
+  $inp.focus()
+  $overlay.style.display = 'block'
+}
+
+function closeCmdPalette() {
+  cmdPaletteOpen = false
+  $('#cmdPalette').classList.remove('open')
+  $overlay.style.display = ''
+}
+
+function renderCmdList() {
+  const $list = $('#cmdList')
+  $list.innerHTML = cmdFiltered.map((action, i) => {
+    const shortcutHtml = action.shortcut.length
+      ? action.shortcut.map(k => `<kbd>${escapeHtml(k)}</kbd>`).join('')
+      : ''
+    return `<div class="cmd-palette-item ${i === cmdSelectedIndex ? 'selected' : ''}" data-index="${i}">
+      <span class="cmd-icon">${escapeHtml(action.icon)}</span>
+      <span class="cmd-label">${escapeHtml(action.label)}</span>
+      <span class="cmd-shortcut">${shortcutHtml}</span>
+    </div>`
+  }).join('')
+
+  $list.querySelectorAll('.cmd-palette-item').forEach(el => {
+    el.onclick = () => {
+      const idx = parseInt(el.dataset.index)
+      executeCmdAction(idx)
+    }
+    el.onmouseenter = () => {
+      cmdSelectedIndex = parseInt(el.dataset.index)
+      renderCmdList()
+    }
+  })
+}
+
+function executeCmdAction(index) {
+  if (cmdFiltered[index]) {
+    closeCmdPalette()
+    cmdFiltered[index].action()
+  }
+}
+
+$('#cmdInput').addEventListener('input', (e) => {
+  const query = e.target.value.toLowerCase()
+  cmdFiltered = CMD_ACTIONS.filter(a => a.label.toLowerCase().includes(query))
+  cmdSelectedIndex = 0
+  renderCmdList()
+})
+
+$('#cmdInput').addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowDown') {
+    e.preventDefault()
+    cmdSelectedIndex = Math.min(cmdSelectedIndex + 1, cmdFiltered.length - 1)
+    renderCmdList()
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault()
+    cmdSelectedIndex = Math.max(cmdSelectedIndex - 1, 0)
+    renderCmdList()
+  } else if (e.key === 'Enter') {
+    e.preventDefault()
+    executeCmdAction(cmdSelectedIndex)
+  } else if (e.key === 'Escape') {
+    closeCmdPalette()
+  }
+})
+
+let shortcutsOpen = false
+
+function openShortcuts() {
+  shortcutsOpen = true
+  $('#shortcutsModal').classList.add('open')
+  $overlay.style.display = 'block'
+}
+
+function closeShortcuts() {
+  shortcutsOpen = false
+  $('#shortcutsModal').classList.remove('open')
+  $overlay.style.display = ''
+}
+
+$('#shortcutsClose').onclick = closeShortcuts
+
+function isInputFocused() {
+  const active = document.activeElement
+  return active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.tagName === 'SELECT')
+}
+
+document.addEventListener('keydown', (e) => {
+  const meta = e.metaKey || e.ctrlKey
+
+  if (e.key === 'Escape') {
+    if (cmdPaletteOpen) { closeCmdPalette(); return }
+    if (shortcutsOpen) { closeShortcuts(); return }
+    const openModal = document.querySelector('.modal[style*="block"]')
+    if (openModal) { hideModals(); return }
+    if (isInputFocused()) { document.activeElement.blur(); return }
+    return
+  }
+
+  if (meta && e.key === 'k') {
+    e.preventDefault()
+    if (cmdPaletteOpen) closeCmdPalette()
+    else openCmdPalette()
+    return
+  }
+
+  if (meta && e.shiftKey && e.key.toLowerCase() === 's') {
+    e.preventDefault()
+    $('#settingsBtn').click()
+    return
+  }
+
+  if (meta && e.key === 'n') {
+    e.preventDefault()
+    createSession()
+    return
+  }
+
+  if (meta && e.key === 'b') {
+    e.preventDefault()
+    toggleSidebar()
+    return
+  }
+
+  if (meta && e.key === '.') {
+    e.preventDefault()
+    $('#activityToggle').click()
+    return
+  }
+
+  if (meta && e.key >= '1' && e.key <= '4') {
+    e.preventDefault()
+    const tabs = ['chat', 'usage', 'metrics', 'traces']
+    switchTab(tabs[parseInt(e.key) - 1])
+    return
+  }
+
+  if (!isInputFocused() && !meta && !e.shiftKey && !e.altKey) {
+    if (e.key === '/') {
+      e.preventDefault()
+      $input.focus()
+      return
+    }
+    if (e.key === '?') {
+      e.preventDefault()
+      if (shortcutsOpen) closeShortcuts()
+      else openShortcuts()
+      return
+    }
+  }
+})
+
+const VALID_API_INDICATORS = new Set(['none', 'minor', 'major', 'critical', 'unknown'])
+
+async function checkApiStatus() {
+  try {
+    const res = await fetch('/api-status', { headers: authHeaders() })
+    const data = await res.json()
+    const dot = $('#apiStatusDot')
+    const banner = $('#apiBanner')
+    const ind = VALID_API_INDICATORS.has(data.indicator) ? data.indicator : 'unknown'
+
+    dot.className = 'api-status-dot ' + ind
+    dot.title = 'Anthropic API: ' + (data.description || 'Unknown')
+
+    if (ind !== 'none' && ind !== 'unknown') {
+      banner.textContent = 'Anthropic API: ' + (data.description || ind)
+      banner.className = 'api-banner visible ' + ind
+    } else {
+      banner.classList.remove('visible')
+    }
+  } catch {
+    const dot = $('#apiStatusDot')
+    dot.className = 'api-status-dot unknown'
+    dot.title = 'Anthropic API: Unable to check'
+  }
+}
+
 checkHealth()
 loadSessions()
 connectActivitySSE()
 checkActiveChats()
+checkApiStatus()
 setInterval(checkHealth, 15000)
 setInterval(loadSessions, 60000)
+setInterval(checkApiStatus, 60000)
 setInterval(() => {
   if (activeTab === 'metrics') loadMetrics()
 }, 30000)

@@ -9,10 +9,28 @@ const TRACE_SCOPE = "traces";
 const USAGE_SCOPE = "usage_daily";
 const BACKFILL_SCOPE = "backfill_state";
 
-const PRICING: Record<string, { input: number; output: number; cacheRead: number; cacheWrite: number }> = {
-  "claude-opus-4-6": { input: 15, output: 75, cacheRead: 1.5, cacheWrite: 18.75 },
-  "claude-sonnet-4-6": { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
-  "claude-haiku-4-5-20251001": { input: 0.8, output: 4, cacheRead: 0.08, cacheWrite: 1 },
+const PRICING: Record<
+  string,
+  { input: number; output: number; cacheRead: number; cacheWrite: number }
+> = {
+  "claude-opus-4-6": {
+    input: 15,
+    output: 75,
+    cacheRead: 1.5,
+    cacheWrite: 18.75,
+  },
+  "claude-sonnet-4-6": {
+    input: 3,
+    output: 15,
+    cacheRead: 0.3,
+    cacheWrite: 3.75,
+  },
+  "claude-haiku-4-5-20251001": {
+    input: 0.8,
+    output: 4,
+    cacheRead: 0.08,
+    cacheWrite: 1,
+  },
 };
 
 function modelShortName(model: string): string {
@@ -24,11 +42,7 @@ function modelShortName(model: string): string {
 
 function getPricing(model: string) {
   if (PRICING[model]) return PRICING[model];
-  for (const [key, val] of Object.entries(PRICING)) {
-    if (model.includes(key.split("-")[1] || "")) return val;
-  }
   if (model.includes("opus")) return PRICING["claude-opus-4-6"];
-  if (model.includes("sonnet")) return PRICING["claude-sonnet-4-6"];
   if (model.includes("haiku")) return PRICING["claude-haiku-4-5-20251001"];
   return PRICING["claude-sonnet-4-6"];
 }
@@ -63,7 +77,10 @@ interface SessionCostData {
   durationSeconds: number;
 }
 
-function parseSessionFile(filePath: string, sessionId: string): SessionCostData | null {
+function parseSessionFile(
+  filePath: string,
+  sessionId: string,
+): SessionCostData | null {
   try {
     const content = readFileSync(filePath, "utf-8");
     const lines = content.split("\n");
@@ -104,17 +121,31 @@ function parseSessionFile(filePath: string, sessionId: string): SessionCostData 
       } catch {}
     }
 
-    if (totalInput === 0 && totalOutput === 0 && totalCacheRead === 0 && totalCacheWrite === 0) {
+    if (
+      totalInput === 0 &&
+      totalOutput === 0 &&
+      totalCacheRead === 0 &&
+      totalCacheWrite === 0
+    ) {
       return null;
     }
 
     if (!model) model = "claude-sonnet-4-6";
 
-    const cost = calculateCost(model, totalInput, totalOutput, totalCacheRead, totalCacheWrite);
+    const cost = calculateCost(
+      model,
+      totalInput,
+      totalOutput,
+      totalCacheRead,
+      totalCacheWrite,
+    );
 
     let durationSeconds = 0;
     if (firstTs && lastTs) {
-      durationSeconds = Math.max(0, (new Date(lastTs).getTime() - new Date(firstTs).getTime()) / 1000);
+      durationSeconds = Math.max(
+        0,
+        (new Date(lastTs).getTime() - new Date(firstTs).getTime()) / 1000,
+      );
     }
 
     return {
@@ -135,21 +166,63 @@ function parseSessionFile(filePath: string, sessionId: string): SessionCostData 
   }
 }
 
-export async function backfillSessionCosts(): Promise<{ sessions: number; totalCost: number }> {
+export async function getSessionCost(
+  sessionId: string,
+): Promise<number | null> {
+  try {
+    const data = await state.get<{ cost?: number }>({
+      scope: TRACE_SCOPE,
+      key: sessionId,
+    });
+    return data?.cost ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function getSessionCosts(
+  sessionIds: string[],
+): Promise<Record<string, number>> {
+  const costs: Record<string, number> = {};
+  const CHUNK = 20;
+  for (let i = 0; i < sessionIds.length; i += CHUNK) {
+    await Promise.all(
+      sessionIds.slice(i, i + CHUNK).map(async (id) => {
+        const cost = await getSessionCost(id);
+        if (cost !== null) costs[id] = cost;
+      }),
+    );
+  }
+  return costs;
+}
+
+export async function backfillSessionCosts(): Promise<{
+  sessions: number;
+  totalCost: number;
+}> {
   let lastBackfill = "";
   try {
-    const bs = await state.get<{ lastRun: string }>({ scope: BACKFILL_SCOPE, key: "session_costs" });
+    const bs = await state.get<{ lastRun: string }>({
+      scope: BACKFILL_SCOPE,
+      key: "session_costs",
+    });
     if (bs?.lastRun) lastBackfill = bs.lastRun;
   } catch {}
 
   const sessions = await getSessionIndex();
   let processed = 0;
   let totalCost = 0;
-  const dailyAgg: Record<string, { requests: number; cost: number; input: number; output: number }> = {};
+  const dailyAgg: Record<
+    string,
+    { requests: number; cost: number; input: number; output: number }
+  > = {};
 
   for (const session of sessions) {
     try {
-      const existing = await state.get<{ _key: string }>({ scope: TRACE_SCOPE, key: session.id });
+      const existing = await state.get<{ _key: string }>({
+        scope: TRACE_SCOPE,
+        key: session.id,
+      });
       if (existing) continue;
 
       let mtime: string;
@@ -173,7 +246,8 @@ export async function backfillSessionCosts(): Promise<{ sessions: number; totalC
           sessionId: session.id,
           model: modelShortName(data.model),
           cost: data.cost,
-          inputTokens: data.inputTokens + data.cacheReadTokens + data.cacheWriteTokens,
+          inputTokens:
+            data.inputTokens + data.cacheReadTokens + data.cacheWriteTokens,
           outputTokens: data.outputTokens,
           duration: data.durationSeconds * 1000,
           exitCode: 0,
@@ -183,10 +257,12 @@ export async function backfillSessionCosts(): Promise<{ sessions: number; totalC
       });
 
       const day = (data.lastTimestamp || session.lastModified).slice(0, 10);
-      if (!dailyAgg[day]) dailyAgg[day] = { requests: 0, cost: 0, input: 0, output: 0 };
+      if (!dailyAgg[day])
+        dailyAgg[day] = { requests: 0, cost: 0, input: 0, output: 0 };
       dailyAgg[day].requests++;
       dailyAgg[day].cost += data.cost;
-      dailyAgg[day].input += data.inputTokens + data.cacheReadTokens + data.cacheWriteTokens;
+      dailyAgg[day].input +=
+        data.inputTokens + data.cacheReadTokens + data.cacheWriteTokens;
       dailyAgg[day].output += data.outputTokens;
 
       totalCost += data.cost;
@@ -243,7 +319,10 @@ export async function backfillSessionCosts(): Promise<{ sessions: number; totalC
   } catch {}
 
   if (processed > 0) {
-    logger.info("Session cost backfill complete", { processed, totalCost: totalCost.toFixed(4) });
+    logger.info("Session cost backfill complete", {
+      processed,
+      totalCost: totalCost.toFixed(4),
+    });
   }
 
   return { sessions: processed, totalCost };

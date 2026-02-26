@@ -25,7 +25,8 @@ import { writeChatEvent, listChatEvents } from "./streams.js";
 import { getSessionIndex, getSessionFilePath } from "./sessions.js";
 import { metricsCollector, getMetrics } from "./metrics.js";
 import { handleActivitySSE } from "./activity.js";
-import { getUsageStats } from "./usage.js";
+import { getUsageStats, getPaceStats } from "./usage.js";
+import { getSessionCosts } from "./session-costs.js";
 import {
   getTimeline,
   getActiveAlerts,
@@ -593,11 +594,33 @@ async function handleSessions(
     (a, b) => new Date(b.lastUsed).getTime() - new Date(a.lastUsed).getTime(),
   );
 
+  let costs: Record<string, number> = {};
+  try {
+    const ids = all.map((s) => s.id).filter(Boolean);
+    if (ids.length > 0) {
+      costs = await getSessionCosts(ids);
+    }
+  } catch (e) {
+    logger.debug("Failed to load session costs", {
+      error: (e as Error)?.message,
+    });
+  }
+
+  const sessionsWithCosts = all.map((s) => ({
+    ...s,
+    cost: costs[s.id] ?? null,
+  }));
+
   res.writeHead(200, {
     ...corsHeaders(),
     "content-type": "application/json",
   });
-  res.end(JSON.stringify({ sessions: all, count: all.length }));
+  res.end(
+    JSON.stringify({
+      sessions: sessionsWithCosts,
+      count: sessionsWithCosts.length,
+    }),
+  );
 }
 
 function fetchFromEngine(path: string): Promise<string> {
@@ -835,6 +858,14 @@ async function handleSettings(
   );
 }
 
+function formatUptime(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`;
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+}
+
 async function handleHealth(
   _req: IncomingMessage,
   res: ServerResponse,
@@ -852,6 +883,22 @@ async function handleHealth(
 
   const workerMetrics = getMetrics();
 
+  let todayCost = 0;
+  let todayRequests = 0;
+  try {
+    const todayUsage = await getUsageStats(1);
+    const today = new Date().toISOString().slice(0, 10);
+    const todayData = todayUsage.find((u) => u.date === today);
+    if (todayData) {
+      todayCost = todayData.totalCost;
+      todayRequests = todayData.requestCount;
+    }
+  } catch (e) {
+    logger.debug("Failed to load today usage", {
+      error: (e as Error)?.message,
+    });
+  }
+
   res.writeHead(200, {
     ...corsHeaders(),
     "content-type": "application/json",
@@ -859,7 +906,7 @@ async function handleHealth(
   res.end(
     JSON.stringify({
       status: "ok",
-      version: "0.2.0",
+      version: "0.3.0",
       uptime: process.uptime(),
       publishedUrl: tsUrl.includes("tailclaude.local") ? null : tsUrl,
       engine: {
@@ -870,6 +917,13 @@ async function handleHealth(
         active: activeProcesses.size,
         activeFromState: activeChats.length,
         total: sessionCount,
+      },
+      summary: {
+        todayCost,
+        todayRequests,
+        activeChats: activeProcesses.size,
+        uptime: formatUptime(Math.floor(process.uptime())),
+        lastActivity: new Date().toISOString(),
       },
       worker: {
         memory_heap_used: workerMetrics.memory_heap_used,
@@ -886,12 +940,12 @@ async function handleUsage(
   _req: IncomingMessage,
   res: ServerResponse,
 ): Promise<void> {
-  const stats = await getUsageStats(7);
+  const [stats, pace] = await Promise.all([getUsageStats(7), getPaceStats()]);
   res.writeHead(200, {
     ...corsHeaders(),
     "content-type": "application/json",
   });
-  res.end(JSON.stringify({ usage: stats }));
+  res.end(JSON.stringify({ usage: stats, pace }));
 }
 
 async function handleChatReplay(
@@ -943,6 +997,71 @@ async function handleTraces(
     "content-type": "application/json",
   });
   res.end(JSON.stringify({ traces, count: traces.length }));
+}
+
+interface ApiStatusResult {
+  indicator: string;
+  description: string;
+  updatedAt: string;
+}
+
+const VALID_INDICATORS = new Set(["none", "minor", "major", "critical"]);
+let apiStatusCache: { data: ApiStatusResult; fetchedAt: number } | null = null;
+const API_STATUS_CACHE_TTL = 60_000;
+
+async function handleApiStatus(
+  _req: IncomingMessage,
+  res: ServerResponse,
+): Promise<void> {
+  const now = Date.now();
+  if (apiStatusCache && now - apiStatusCache.fetchedAt < API_STATUS_CACHE_TTL) {
+    res.writeHead(200, {
+      ...corsHeaders(),
+      "content-type": "application/json",
+    });
+    res.end(JSON.stringify(apiStatusCache.data));
+    return;
+  }
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3000);
+    const response = await fetch(
+      "https://status.anthropic.com/api/v2/status.json",
+      {
+        signal: controller.signal,
+      },
+    );
+    clearTimeout(timeout);
+
+    const json = (await response.json()) as {
+      status?: { indicator?: string; description?: string };
+      page?: { updated_at?: string };
+    };
+    const rawIndicator = json.status?.indicator ?? "";
+    const result: ApiStatusResult = {
+      indicator: VALID_INDICATORS.has(rawIndicator) ? rawIndicator : "unknown",
+      description: json.status?.description || "Unable to determine",
+      updatedAt: json.page?.updated_at || new Date().toISOString(),
+    };
+    apiStatusCache = { data: result, fetchedAt: now };
+    res.writeHead(200, {
+      ...corsHeaders(),
+      "content-type": "application/json",
+    });
+    res.end(JSON.stringify(result));
+  } catch {
+    const fallback: ApiStatusResult = {
+      indicator: "unknown",
+      description: "Unable to check",
+      updatedAt: new Date().toISOString(),
+    };
+    res.writeHead(200, {
+      ...corsHeaders(),
+      "content-type": "application/json",
+    });
+    res.end(JSON.stringify(fallback));
+  }
 }
 
 let server: Server | null = null;
@@ -1083,6 +1202,14 @@ export function startProxy(): Promise<void> {
       if (method === "GET" && pathname === "/traces") {
         handleTraces(req, res).catch(() => {
           if (!res.headersSent) jsonError(res, 500, "Failed to fetch traces");
+        });
+        return;
+      }
+
+      if (method === "GET" && pathname === "/api-status") {
+        handleApiStatus(req, res).catch(() => {
+          if (!res.headersSent)
+            jsonError(res, 500, "Failed to check API status");
         });
         return;
       }
