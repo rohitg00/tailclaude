@@ -941,11 +941,9 @@ async function handleUsage(
   res: ServerResponse,
 ): Promise<void> {
   const url = new URL(req.url || "", `http://${req.headers.host}`);
-  const rawBudget = url.searchParams.get("budget");
+  const budgetNum = Number(url.searchParams.get("budget"));
   const budgetUsd =
-    rawBudget != null && isFinite(Number(rawBudget)) && Number(rawBudget) > 0
-      ? Number(rawBudget)
-      : undefined;
+    isFinite(budgetNum) && budgetNum > 0 ? budgetNum : undefined;
   const [stats, pace] = await Promise.all([
     getUsageStats(7),
     getPaceStats(budgetUsd),

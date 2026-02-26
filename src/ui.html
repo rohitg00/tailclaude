@@ -826,8 +826,7 @@ async function loadUsage() {
     $('#todayInput').textContent = (todayData?.totalInputTokens || 0).toLocaleString()
     $('#todayOutput').textContent = (todayData?.totalOutputTokens || 0).toLocaleString()
 
-    let totalAll = 0
-    usage.forEach(u => totalAll += u.totalCost || 0)
+    const totalAll = usage.reduce((sum, u) => sum + (u.totalCost || 0), 0)
     $('#totalCostAll').textContent = '$' + totalAll.toFixed(4)
 
     $('#paceDaily').textContent = '$' + (pace.dailyAvgCost || 0).toFixed(2)
